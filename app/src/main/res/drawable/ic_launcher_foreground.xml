@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Left sound waves (3 arcs, within safe zone x=18..90) -->
+    <path android:fillColor="#00000000" android:strokeColor="#FFFFFF" android:strokeWidth="1.8" android:pathData="M41,44 Q34,54 41,64" />
+    <path android:fillColor="#00000000" android:strokeColor="#FFFFFF" android:strokeWidth="1.8" android:pathData="M37,40 Q26,54 37,68" />
+    <path android:fillColor="#00000000" android:strokeColor="#FFFFFF" android:strokeWidth="1.8" android:pathData="M33,36 Q18,54 33,72" />
+
+    <!-- Right sound waves (3 arcs, mirrored) -->
+    <path android:fillColor="#00000000" android:strokeColor="#FFFFFF" android:strokeWidth="1.8" android:pathData="M67,44 Q74,54 67,64" />
+    <path android:fillColor="#00000000" android:strokeColor="#FFFFFF" android:strokeWidth="1.8" android:pathData="M71,40 Q82,54 71,68" />
+    <path android:fillColor="#00000000" android:strokeColor="#FFFFFF" android:strokeWidth="1.8" android:pathData="M75,36 Q90,54 75,72" />
+
+    <!-- Mic capsule (rounded oval at top) -->
+    <path android:fillColor="#FFFFFF" android:pathData="M45,23 C45,17 48,14 54,14 C60,14 63,17 63,23 L63,38 C63,44 60,47 54,47 C48,47 45,44 45,38 Z" />
+
+    <!-- Mic neck -->
+    <path android:fillColor="#FFFFFF" android:pathData="M49,47 L59,47 L59,51 L49,51 Z" />
+
+    <!-- Mic body (handle) -->
+    <path android:fillColor="#FFFFFF" android:pathData="M42,51 C40,51 39,52.5 39,54 L39,68 C39,69.5 40,71 42,71 L66,71 C68,71 69,69.5 69,68 L69,54 C69,52.5 68,51 66,51 Z" />
+
+    <!-- Mic base -->
+    <path android:fillColor="#FFFFFF" android:pathData="M38,71 L70,71 L72,76 L36,76 Z" />
+
+</vector>
