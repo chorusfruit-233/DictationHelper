@@ -87,4 +87,4 @@ jobs:
             - 预装中文模型: ${{ inputs.bundle_vosk_cn }}
             - 预装英文模型: ${{ inputs.bundle_vosk_en }}
           draft: false
-          prerelease: true
+          prerelease: false
