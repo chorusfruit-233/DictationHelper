@@ -40,6 +40,11 @@ jobs:
 
       - name: Build standard APK
         run: ./gradlew assembleRelease
+        env:
+          KEYSTORE_FILE: dictation-helper.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
       - name: Move standard APK
         run: |
@@ -71,6 +76,11 @@ jobs:
           ./gradlew assembleRelease
           mv app/build/outputs/apk/release/*.apk \
             "DictationHelper-v${{ steps.version.outputs.version }}-with-models.apk"
+        env:
+          KEYSTORE_FILE: dictation-helper.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
