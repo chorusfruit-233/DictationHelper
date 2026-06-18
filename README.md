@@ -8,6 +8,7 @@
 - 多词表支持（创建、切换、删除词表）
 - 单词/短语条目管理（英文、中文释义、词性）
 - 本地 JSON 文件持久化存储
+- 首次启动为空词表，支持手动导入或视觉 AI 导入
 
 ### 听写匹配
 - **手动输入**：输入老师说的话，自动匹配词库中最可能的单词
@@ -66,7 +67,6 @@ app/src/main/java/com/example/dictationhelper/
 ├── model/
 │   └── WordItem.kt            # WordList + WordItem 数据模型
 ├── data/
-│   ├── SampleData.kt          # 示例词库
 │   ├── WordRepository.kt      # 词库仓库（多词表）
 │   └── WordStorage.kt         # JSON 文件读写
 ├── matching/
@@ -148,11 +148,14 @@ storeFile=../app/your-keystore.jks
 GitHub Actions 手动触发：Actions → **Build & Release** → **Run workflow**
 
 可选参数：
-- `Create Release` — 发布 GitHub Release
-- `Bundle Vosk CN` — 预装中文语音模型
-- `Bundle Vosk EN` — 预装英文语音模型
+- `Create Release` — 发布 GitHub Release（Tag 使用 `versionName`）
+- `Also build with Vosk models` — 额外构建预装中英文离线模型的 APK
 
-构建产物：Release APK（R8 优化 + 签名 + 去日志）
+**构建产物**（Release APK，R8 优化 + 签名 + 去日志）：
+- `DictationHelper-v{version}.apk` — 标准版
+- `DictationHelper-v{version}-with-models.apk` — 预装中/英文离线语音模型
+
+**缓存**：Gradle 依赖 + 配置缓存 + Vosk 模型 zip 均自动缓存，重复构建显著加速。
 
 ## 许可证
 
