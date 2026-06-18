@@ -28,6 +28,8 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
 
       - name: Decode signing keystore
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/dictation-helper.jks
@@ -51,23 +53,36 @@ jobs:
           mv app/build/outputs/apk/release/*.apk \
             "DictationHelper-v${{ steps.version.outputs.version }}.apk"
 
-      - name: Download Vosk models
+      - name: Restore Vosk model cache
         if: ${{ inputs.bundle_vosk }}
+        id: vosk-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/vosk-cache
+          key: vosk-models-cn-en
+
+      - name: Download Vosk models
+        if: ${{ inputs.bundle_vosk && steps.vosk-cache.outputs.cache-hit != 'true' }}
         run: |
+          mkdir -p /tmp/vosk-cache
           echo "Downloading vosk-model-small-cn-0.22 (~42MB)..."
-          mkdir -p app/src/main/assets/vosk_model_cn
           curl -L --connect-timeout 30 --max-time 600 \
             "https://alphacephei.com/vosk/models/vosk-model-small-cn-0.22.zip" \
-            -o /tmp/vosk_cn.zip
-          unzip -q /tmp/vosk_cn.zip -d /tmp/vosk_cn
-          mv /tmp/vosk_cn/*/* app/src/main/assets/vosk_model_cn/
-
+            -o /tmp/vosk-cache/vosk_cn.zip
           echo "Downloading vosk-model-small-en-us-0.15 (~40MB)..."
-          mkdir -p app/src/main/assets/vosk_model_en
           curl -L --connect-timeout 30 --max-time 600 \
             "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip" \
-            -o /tmp/vosk_en.zip
-          unzip -q /tmp/vosk_en.zip -d /tmp/vosk_en
+            -o /tmp/vosk-cache/vosk_en.zip
+
+      - name: Extract Vosk models to assets
+        if: ${{ inputs.bundle_vosk }}
+        run: |
+          mkdir -p app/src/main/assets/vosk_model_cn
+          unzip -q /tmp/vosk-cache/vosk_cn.zip -d /tmp/vosk_cn
+          mv /tmp/vosk_cn/*/* app/src/main/assets/vosk_model_cn/
+
+          mkdir -p app/src/main/assets/vosk_model_en
+          unzip -q /tmp/vosk-cache/vosk_en.zip -d /tmp/vosk_en
           mv /tmp/vosk_en/*/* app/src/main/assets/vosk_model_en/
 
       - name: Build APK with models
