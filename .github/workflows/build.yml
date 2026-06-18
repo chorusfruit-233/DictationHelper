@@ -61,6 +61,13 @@ jobs:
           path: /tmp/vosk-cache
           key: vosk-models-cn-en
 
+      - name: Restore Gradle config cache
+        uses: actions/cache@v4
+        with:
+          path: .gradle/configuration-cache
+          key: gradle-config-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', 'gradle/libs.versions.toml') }}
+          restore-keys: gradle-config-
+
       - name: Download Vosk models
         if: ${{ inputs.bundle_vosk && steps.vosk-cache.outputs.cache-hit != 'true' }}
         run: |
