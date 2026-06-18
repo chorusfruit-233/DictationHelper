@@ -67,6 +67,12 @@ android {
         compose = true
         buildConfig = true
     }
+
+    packaging {
+        jniLibs {
+            excludes += emptySet<String>()
+        }
+    }
 }
 
 dependencies {

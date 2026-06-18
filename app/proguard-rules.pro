@@ -5,8 +5,13 @@
     public static int i(...);
 }
 
-# Keep Vosk native library
--keep class org.vosk.** { *; }
+# Keep Vosk native library — critical for JNI
+-keep class org.vosk.LibVosk { *; }
+-keep class org.vosk.Recognizer { *; }
+-keep class org.vosk.Model { *; }
+-keepclasseswithmembernames class * {
+    native <methods>;
+}
 
 # Keep OkHttp
 -dontwarn okhttp3.**
