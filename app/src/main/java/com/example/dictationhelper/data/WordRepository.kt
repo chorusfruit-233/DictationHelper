@@ -14,16 +14,16 @@ object WordRepository {
     var currentListId by mutableStateOf("")
 
     fun init(context: Context) {
-        val data = WordStorage.loadAll(context)
+        val saved = WordStorage.loadAll(context)
         lists.clear()
-        if (data.lists.isNotEmpty()) {
-            lists.addAll(data.lists)
-            currentListId = data.currentListId.ifEmpty { lists.firstOrNull()?.id ?: "" }
+        if (saved.lists.isNotEmpty()) {
+            lists.addAll(saved.lists)
+            currentListId = saved.currentListId.ifEmpty { lists.firstOrNull()?.id ?: "" }
         } else {
             val default = WordList(
                 id = "default",
-                name = "Unit 1",
-                words = SampleData.defaultWords
+                name = "默认词表",
+                words = emptyList()
             )
             lists.add(default)
             currentListId = default.id

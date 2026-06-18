@@ -68,7 +68,20 @@ object VoskModelManager {
         val dir = File(context.filesDir, modelDirForLang(lang))
         val amFinal = File(dir, "am/final.mdl")
         val confFile = File(dir, "conf/model.conf")
-        return amFinal.exists() && confFile.exists()
+        if (amFinal.exists() && confFile.exists()) return true
+
+        // Check assets for pre-installed model (from CI build)
+        val assetsDir = modelDirForLang(lang)
+        return try {
+            val assetFiles = context.assets.list(assetsDir)
+            if (assetFiles != null && assetFiles.isNotEmpty()) {
+                // Copy assets to files dir so Vosk can use it
+                copyAssets(context, assetsDir, dir)
+                amFinal.exists() && confFile.exists()
+            } else false
+        } catch (_: Exception) {
+            false
+        }
     }
 
     fun importFromUri(context: Context, lang: String, uri: Uri, onComplete: (Boolean) -> Unit) {
