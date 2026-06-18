@@ -20,7 +20,48 @@ object VoskModelManager {
     fun modelDirForLang(lang: String) = if (lang == "en-US") MODEL_DIR_EN else MODEL_DIR_CN
 
     fun getModelPath(context: Context, lang: String): String {
-        return File(context.filesDir, modelDirForLang(lang)).absolutePath
+        val filesDir = File(context.filesDir, modelDirForLang(lang))
+        if (filesDir.exists() && filesDir.isDirectory && File(filesDir, "am/final.mdl").exists()) {
+            return filesDir.absolutePath
+        }
+        // Check assets for bundled model
+        val assetsDir = modelDirForLang(lang)
+        return try {
+            val assetFiles = context.assets.list(assetsDir)
+            if (assetFiles != null && assetFiles.isNotEmpty()) {
+                // Copy from assets to files for Vosk (needs file path)
+                val targetDir = File(context.filesDir, assetsDir)
+                if (!targetDir.exists()) {
+                    copyAssets(context, assetsDir, targetDir)
+                }
+                targetDir.absolutePath
+            } else {
+                filesDir.absolutePath
+            }
+        } catch (_: Exception) {
+            filesDir.absolutePath
+        }
+    }
+
+    private fun copyAssets(context: Context, assetPath: String, targetDir: File) {
+        targetDir.mkdirs()
+        context.assets.list(assetPath)?.forEach { name ->
+            val childPath = "$assetPath/$name"
+            val childFile = File(targetDir, name)
+            try {
+                val subFiles = context.assets.list(childPath)
+                if (subFiles != null && subFiles.isNotEmpty()) {
+                    copyAssets(context, childPath, childFile)
+                } else {
+                    context.assets.open(childPath).use { input ->
+                        childFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+            }
+        }
     }
 
     fun isModelReady(context: Context, lang: String): Boolean {
