@@ -13,3 +13,5 @@
 .externalNativeBuild
 .cxx
 local.properties
+/app/dictation-helper.jks
+/keystore.properties

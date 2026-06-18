@@ -65,7 +65,6 @@ import com.example.dictationhelper.matching.Matcher
 import com.example.dictationhelper.matching.ParsedAction
 import com.example.dictationhelper.matching.RuleParser
 import com.example.dictationhelper.model.WordItem
-import com.example.dictationhelper.speech.VoskModelManager
 import com.example.dictationhelper.speech.VoskRecognizer
 import com.example.dictationhelper.ui.theme.ThemeSettings
 import kotlinx.coroutines.launch
@@ -247,13 +246,6 @@ fun DictationScreen(onBack: () -> Unit = {}) {
                         Text("English", fontSize = 13.sp)
                     }
                 }
-            }
-            item {
-                Text(
-                    text = "[调试] useVosk=$useVosk hasPerm=$hasPermission isListening=${voskRecognizer.isListening} err=${voskRecognizer.error} modelReady=${VoskModelManager.isModelReady(context, speechLang)}",
-                    fontSize = 10.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
             item {
                 Button(

@@ -8,11 +8,11 @@ on:
         type: boolean
         default: false
       bundle_vosk_cn:
-        description: 'Pre-install Vosk 中文模型 (~42MB)'
+        description: 'Pre-install Vosk CN model (~42MB)'
         type: boolean
         default: false
       bundle_vosk_en:
-        description: 'Pre-install Vosk 英文模型 (~40MB)'
+        description: 'Pre-install Vosk EN model (~40MB)'
         type: boolean
         default: false
 
@@ -30,6 +30,10 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+
+      - name: Decode signing keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/dictation-helper.jks
 
       - name: Bundle Vosk CN model
         if: ${{ inputs.bundle_vosk_cn }}
@@ -55,27 +59,30 @@ jobs:
           mv /tmp/vosk_en/*/* app/src/main/assets/vosk_model_en/
           echo "EN model bundled: $(find app/src/main/assets/vosk_model_en -type f | wc -l) files"
 
-      - name: Build APK
-        run: ./gradlew assembleDebug
+      - name: Build Release APK
+        run: ./gradlew assembleRelease
+        env:
+          KEYSTORE_FILE: app/dictation-helper.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: DictationHelper-debug
-          path: app/build/outputs/apk/debug/*.apk
+          name: DictationHelper-release
+          path: app/build/outputs/apk/release/*.apk
 
       - name: Create Release
         if: ${{ inputs.create_release }}
         uses: softprops/action-gh-release@v2
         with:
-          files: app/build/outputs/apk/debug/*.apk
-          tag_name: build-${{ github.run_number }}
-          name: Build #${{ github.run_number }}
+          files: app/build/outputs/apk/release/*.apk
+          tag_name: v${{ github.run_number }}
+          name: Release v${{ github.run_number }}
           body: |
             ### 构建参数
             - 预装中文模型: ${{ inputs.bundle_vosk_cn }}
             - 预装英文模型: ${{ inputs.bundle_vosk_en }}
-
-            > Debug 构建，仅供测试
           draft: false
           prerelease: true
