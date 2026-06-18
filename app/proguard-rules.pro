@@ -13,6 +13,14 @@
     native <methods>;
 }
 
+# Keep JNA — Vosk depends on it, R8 must not touch field names
+-keep class com.sun.jna.** { *; }
+-dontwarn com.sun.jna.**
+-keepclassmembers class com.sun.jna.Pointer {
+    long peer;
+    long original;
+}
+
 # Keep OkHttp
 -dontwarn okhttp3.**
 -dontwarn okio.**
