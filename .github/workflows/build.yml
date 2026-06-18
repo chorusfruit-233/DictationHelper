@@ -7,14 +7,10 @@ on:
         description: 'Publish as GitHub Release'
         type: boolean
         default: false
-      bundle_vosk_cn:
-        description: 'Pre-install Vosk CN model (~42MB)'
+      bundle_vosk:
+        description: 'Also build APK with pre-installed Vosk models (CN+EN)'
         type: boolean
-        default: false
-      bundle_vosk_en:
-        description: 'Pre-install Vosk EN model (~40MB)'
-        type: boolean
-        default: false
+        default: true
 
 jobs:
   build:
@@ -34,11 +30,24 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Decode signing keystore
-        run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/dictation-helper.jks
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/dictation-helper.jks
 
-      - name: Bundle Vosk CN model
-        if: ${{ inputs.bundle_vosk_cn }}
+      - name: Get version name
+        id: version
+        run: |
+          VERSION=$(grep 'versionName' app/build.gradle.kts | grep -oP '"\K[^"]+')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build standard APK
+        run: ./gradlew assembleRelease
+
+      - name: Move standard APK
+        run: |
+          mv app/build/outputs/apk/release/*.apk \
+            "DictationHelper-v${{ steps.version.outputs.version }}.apk"
+
+      - name: Download Vosk models
+        if: ${{ inputs.bundle_vosk }}
         run: |
           echo "Downloading vosk-model-small-cn-0.22 (~42MB)..."
           mkdir -p app/src/main/assets/vosk_model_cn
@@ -47,11 +56,7 @@ jobs:
             -o /tmp/vosk_cn.zip
           unzip -q /tmp/vosk_cn.zip -d /tmp/vosk_cn
           mv /tmp/vosk_cn/*/* app/src/main/assets/vosk_model_cn/
-          echo "CN model bundled: $(find app/src/main/assets/vosk_model_cn -type f | wc -l) files"
 
-      - name: Bundle Vosk EN model
-        if: ${{ inputs.bundle_vosk_en }}
-        run: |
           echo "Downloading vosk-model-small-en-us-0.15 (~40MB)..."
           mkdir -p app/src/main/assets/vosk_model_en
           curl -L --connect-timeout 30 --max-time 600 \
@@ -59,32 +64,33 @@ jobs:
             -o /tmp/vosk_en.zip
           unzip -q /tmp/vosk_en.zip -d /tmp/vosk_en
           mv /tmp/vosk_en/*/* app/src/main/assets/vosk_model_en/
-          echo "EN model bundled: $(find app/src/main/assets/vosk_model_en -type f | wc -l) files"
 
-      - name: Build Release APK
-        run: ./gradlew assembleRelease
-        env:
-          KEYSTORE_FILE: dictation-helper.jks
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      - name: Build APK with models
+        if: ${{ inputs.bundle_vosk }}
+        run: |
+          ./gradlew assembleRelease
+          mv app/build/outputs/apk/release/*.apk \
+            "DictationHelper-v${{ steps.version.outputs.version }}-with-models.apk"
 
-      - name: Upload APK artifact
+      - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: DictationHelper-release
-          path: app/build/outputs/apk/release/*.apk
+          name: DictationHelper-v${{ steps.version.outputs.version }}
+          path: "*.apk"
 
       - name: Create Release
         if: ${{ inputs.create_release }}
         uses: softprops/action-gh-release@v2
         with:
-          files: app/build/outputs/apk/release/*.apk
-          tag_name: v${{ github.run_number }}
-          name: Release v${{ github.run_number }}
+          files: "*.apk"
+          tag_name: v${{ steps.version.outputs.version }}
+          name: DictationHelper v${{ steps.version.outputs.version }}
           body: |
-            ### 构建参数
-            - 预装中文模型: ${{ inputs.bundle_vosk_cn }}
-            - 预装英文模型: ${{ inputs.bundle_vosk_en }}
+            ### 构建时间
+            ${{ github.event.repository.updated_at }}
+
+            ### APK
+            - `DictationHelper-v${{ steps.version.outputs.version }}.apk` — 标准版
+            ${{ inputs.bundle_vosk && format('- `DictationHelper-v{0}-with-models.apk` — 预装中/英文离线语音模型', steps.version.outputs.version) || '' }}
           draft: false
           prerelease: false
