@@ -1,5 +1,6 @@
 package com.example.dictationhelper.screens
 
+import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -45,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.dictationhelper.BuildConfig
 import com.example.dictationhelper.data.WordRepository
 import com.example.dictationhelper.llm.AiConfigManager
 import com.example.dictationhelper.llm.AiProfile
@@ -342,17 +344,43 @@ fun SettingsScreen() {
                 }
             }
 
-            // === 版本 ===
+            // === 关于 ===
             item {
-                Text(
-                    text = "听写助手 v1.0",
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 16.dp),
-                    textAlign = TextAlign.Center
-                )
+                SettingsSectionHeader("关于")
+                SettingsCard {
+                    SettingsInfoRow(
+                        label = "应用名称",
+                        summary = "听写助手"
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingsInfoRow(
+                        label = "版本",
+                        summary = BuildConfig.VERSION_NAME
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingsInfoRow(
+                        label = "构建时间",
+                        summary = BuildConfig.BUILD_TIME
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingsClickRow(
+                        label = "源代码",
+                        summary = "GitHub",
+                        onClick = {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/chorusfruit-233/DictationHelper"))
+                            context.startActivity(intent)
+                        }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingsClickRow(
+                        label = "问题反馈",
+                        summary = "Issues",
+                        onClick = {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/chorusfruit-233/DictationHelper/issues"))
+                            context.startActivity(intent)
+                        }
+                    )
+                }
             }
         }
     }
