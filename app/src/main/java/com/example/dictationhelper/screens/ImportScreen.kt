@@ -59,6 +59,7 @@ data class EditableWordItem(
     val text: String,
     val meaningZh: String,
     val partOfSpeech: String = "",
+    val aliases: String = "",
     val type: String,
     val include: Boolean = true
 )
@@ -67,6 +68,7 @@ internal val DEFAULT_VISION_PROMPT = """
 请识别这张图片中的英语单词表，整理成 JSON 格式。
 注意：
 - 识别所有英文单词或短语及其对应的中文释义
+- 为每个单词生成词形变体 aliases，包括：过去式、过去分词、现在分词、单复数、比较级、最高级等形式
 - 如果图片中有单元名或标题，也请提取
 - 短语（多个词组成的）type 设为 "phrase"，单个词 type 设为 "word"
 - 不要输出任何解释，只输出以下格式的 JSON：
@@ -75,7 +77,7 @@ internal val DEFAULT_VISION_PROMPT = """
   "bookName": "书名",
   "unitName": "单元名",
   "items": [
-    {"text": "英文单词或短语", "meaningZh": "中文释义", "partOfSpeech": "词性（如 n./v./adj.，没有则留空）"}
+    {"text": "英文单词或短语", "meaningZh": "中文释义", "partOfSpeech": "词性（如 n./v./adj.，没有则留空）", "aliases": ["过去式", "过去分词", "单复数等变体"]}
   ]
 }
 """.trimIndent()
@@ -342,7 +344,8 @@ private fun ReviewView(
                     onMeaningChange = { items[index] = items[index].copy(meaningZh = it) },
                     onIncludeChange = { items[index] = items[index].copy(include = it) },
                     onTypeChange = { items[index] = items[index].copy(type = it) },
-                    onPartOfSpeechChange = { items[index] = items[index].copy(partOfSpeech = it) }
+                    onPartOfSpeechChange = { items[index] = items[index].copy(partOfSpeech = it) },
+                    onAliasesChange = { items[index] = items[index].copy(aliases = it) }
                 )
             }
         }
@@ -377,7 +380,8 @@ private fun EditableItemCard(
     onMeaningChange: (String) -> Unit,
     onIncludeChange: (Boolean) -> Unit,
     onTypeChange: (String) -> Unit,
-    onPartOfSpeechChange: (String) -> Unit
+    onPartOfSpeechChange: (String) -> Unit,
+    onAliasesChange: (String) -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -437,6 +441,15 @@ private fun EditableItemCard(
                 singleLine = true,
                 placeholder = { Text("n./v./adj.") }
             )
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = item.aliases,
+                onValueChange = onAliasesChange,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("词形变体（逗号分隔）") },
+                singleLine = true,
+                placeholder = { Text("例如：achieved, achieving, achieves") }
+            )
         }
     }
 }
@@ -479,6 +492,9 @@ private fun tryParseJson(text: String): List<EditableWordItem>? {
                     text = english,
                     meaningZh = item.optString("meaningZh", ""),
                     partOfSpeech = item.optString("partOfSpeech", ""),
+                    aliases = item.optJSONArray("aliases")?.let { arr ->
+                        (0 until arr.length()).joinToString(", ") { arr.getString(it) }
+                    } ?: "",
                     type = if (english.contains(" ")) "phrase" else "word"
                 )
             )
@@ -527,5 +543,6 @@ private fun EditableWordItem.toWordItem() = WordItem(
     type = type,
     text = text.trim(),
     meaningZh = meaningZh.trim(),
-    partOfSpeech = partOfSpeech.trim()
+    partOfSpeech = partOfSpeech.trim(),
+    aliases = aliases.split(",").map { it.trim() }.filter { it.isNotBlank() }
 )

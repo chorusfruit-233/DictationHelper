@@ -85,11 +85,21 @@ object Matcher {
                 val target = word.text.lowercase()
                 val queryWords = query.split("\\s+".toRegex())
                 val targetWords = target.split("\\s+".toRegex())
+                val aliasTexts = word.aliases.map { it.lowercase() }
+
+                val allTargets = listOf(target) + aliasTexts
+                val matchedAlias = aliasTexts.any { q ->
+                    q == query || targetWords.all { tw -> tw == q || q.startsWith(tw) } || q.contains(query) || queryWords.any { qw -> q.startsWith(qw) }
+                }
 
                 when {
                     target == query -> {
                         score += 1.0
                         reasons.add("英文完全匹配")
+                    }
+                    aliasTexts.contains(query) -> {
+                        score += 0.9
+                        reasons.add("词形变体匹配（$query）")
                     }
                     queryWords.all { qw -> targetWords.any { tw -> tw == qw || tw.startsWith(qw) } } -> {
                         score += 0.9
@@ -99,11 +109,19 @@ object Matcher {
                         score += 0.7
                         reasons.add("英文包含匹配（\"$query\" 出现在 \"$target\" 中）")
                     }
+                    aliasTexts.any { it.contains(query) } -> {
+                        score += 0.7
+                        reasons.add("词形变体包含匹配")
+                    }
                     queryWords.any { qw -> targetWords.any { tw -> tw.startsWith(qw) } } -> {
                         score += 0.5
                         reasons.add("英文部分匹配")
                     }
-                    isPhoneticMatch(query, target) -> {
+                    queryWords.any { qw -> aliasTexts.any { al -> al.startsWith(qw) } } -> {
+                        score += 0.5
+                        reasons.add("词形变体部分匹配")
+                    }
+                    isPhoneticMatch(query, target) || aliasTexts.any { isPhoneticMatch(query, it) } -> {
                         score += 0.4
                         reasons.add("读音模糊匹配")
                     }
@@ -119,6 +137,11 @@ object Matcher {
             )
         }.filter { it.confidence > 0 }
          .sortedByDescending { it.confidence }
+         .let { results ->
+             val synthetic = if (hasEnglish) tryPhraseSynthesis(constraints.englishPartial!!, words) else null
+             val merged = if (synthetic != null) results + synthetic else results
+             merged.sortedByDescending { it.confidence }
+         }
          .let { results ->
              if (results.size == 1) {
                  listOf(results[0].copy(confidence = 1.0))
@@ -211,6 +234,47 @@ object Matcher {
         }
 
         return null
+    }
+
+    private val STOP_WORDS = setOf("a", "an", "the", "of", "to", "in", "for", "is", "are",
+        "was", "were", "be", "been", "it", "and", "or", "that", "this", "at", "on", "by", "with")
+
+    private fun tryPhraseSynthesis(query: String, words: List<WordItem>): MatchResult? {
+        val queryWords = query.lowercase().split("\\s+".toRegex())
+        if (queryWords.size < 2) return null
+
+        val contentWords = queryWords.filter { it !in STOP_WORDS && it.length > 1 }
+        if (contentWords.size < 2) return null
+
+        // Check if each content word matches a distinct WordItem in the bank
+        val matchedItems = mutableListOf<WordItem>()
+        val usedIds = mutableSetOf<String>()
+        for (qw in contentWords) {
+            val matched = words.find { w ->
+                w.id !in usedIds && (w.text.lowercase() == qw || w.aliases.any { it.lowercase() == qw })
+            }
+            if (matched != null) {
+                matchedItems.add(matched)
+                usedIds.add(matched.id)
+            }
+        }
+
+        if (matchedItems.size < contentWords.size) return null
+
+        val joinedText = matchedItems.joinToString(" ") { it.text }
+        val joinedMeaning = matchedItems.joinToString("；") { it.meaningZh }
+        val hasAliasMatch = matchedItems.any { w -> w.aliases.any { it.lowercase() in contentWords } }
+
+        return MatchResult(
+            word = WordItem(
+                id = "synthetic_${System.currentTimeMillis()}",
+                type = "phrase",
+                text = joinedText,
+                meaningZh = joinedMeaning
+            ),
+            confidence = 0.8,
+            reasons = listOf("从词表合成短语${if (hasAliasMatch) "（含词形变体）" else ""}")
+        )
     }
 
     private fun isPhoneticMatch(query: String, target: String): Boolean {

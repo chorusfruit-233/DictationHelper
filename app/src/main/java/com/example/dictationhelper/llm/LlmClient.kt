@@ -90,7 +90,7 @@ object LlmClient {
 
     private fun buildPrompt(words: List<WordItem>, customPrompt: String?): String {
         val wordListJson = words.joinToString(", ") { w ->
-            """{"text":"${w.text}","meaningZh":"${w.meaningZh}","type":"${w.type}","partOfSpeech":"${w.partOfSpeech}"}"""
+            """{"text":"${w.text}","meaningZh":"${w.meaningZh}","type":"${w.type}","partOfSpeech":"${w.partOfSpeech}","aliases":${w.aliases.joinToString(",") { "\"$it\"" }.let { "[$it]" }}}"""
         }
         val template = if (!customPrompt.isNullOrBlank()) customPrompt else DICTATION_PROMPT_TEMPLATE
         return template.replace("{wordBank}", "当前词库：[$wordListJson]")

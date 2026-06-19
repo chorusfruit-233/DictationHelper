@@ -29,7 +29,10 @@ object WordStorage {
                         type = item.optString("type", "word"),
                         text = item.optString("text", ""),
                         meaningZh = item.optString("meaningZh", ""),
-                        partOfSpeech = item.optString("partOfSpeech", "")
+                        partOfSpeech = item.optString("partOfSpeech", ""),
+                        aliases = item.optJSONArray("aliases")?.let { arr ->
+                            (0 until arr.length()).map { arr.getString(it) }
+                        } ?: emptyList()
                     )
                 }
                 WordList(
@@ -64,6 +67,9 @@ object WordStorage {
                                         put("text", w.text)
                                         put("meaningZh", w.meaningZh)
                                         put("partOfSpeech", w.partOfSpeech)
+                                        put("aliases", org.json.JSONArray().apply {
+                                            w.aliases.forEach { put(it) }
+                                        })
                                     })
                                 }
                             })

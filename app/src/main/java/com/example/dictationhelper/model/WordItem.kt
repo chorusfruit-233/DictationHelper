@@ -11,5 +11,6 @@ data class WordItem(
     val type: String,
     val text: String,
     val meaningZh: String,
-    val partOfSpeech: String = ""
+    val partOfSpeech: String = "",
+    val aliases: List<String> = emptyList()
 )
