@@ -159,8 +159,16 @@ GitHub Actions 手动触发：Actions → **Build & Release** → **Run workflow
 
 **缓存**：Gradle 依赖 + 配置缓存 + Vosk 模型 zip 均自动缓存，重复构建显著加速。
 
-## 许可证
+## License
 
-[GNU General Public License v3.0](LICENSE)
+DictationHelper is free software licensed under the GNU General Public License, version 3 or any later version.
+
+You may use, study, modify, and redistribute this software under the terms of GPLv3 or, at your option, any later GPL version.
+
+SPDX-License-Identifier: GPL-3.0-or-later
+
+The full license text is available in the `LICENSE` and `COPYING` files.
+
+For third-party library and model licenses, see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 
 Copyright (C) 2026 chorusfruit-233

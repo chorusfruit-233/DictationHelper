@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 chorusfruit-233
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 package com.example.dictationhelper.screens
 
 import android.content.Intent
@@ -363,6 +368,11 @@ fun SettingsScreen() {
                         summary = BuildConfig.BUILD_TIME
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingsInfoRow(
+                        label = "许可证",
+                        summary = "GPL-3.0-or-later"
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     SettingsClickRow(
                         label = "源代码",
                         summary = "GitHub",
@@ -380,7 +390,26 @@ fun SettingsScreen() {
                             context.startActivity(intent)
                         }
                     )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingsClickRow(
+                        label = "开源许可证",
+                        summary = "第三方库",
+                        onClick = {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/chorusfruit-233/DictationHelper/blob/main/THIRD_PARTY_LICENSES.md"))
+                            context.startActivity(intent)
+                        }
+                    )
                 }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Copyright (C) 2026 chorusfruit-233\nLicensed under GPLv3 or any later version",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    textAlign = TextAlign.Center
+                )
             }
         }
     }

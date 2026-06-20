@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 chorusfruit-233
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 package com.example.dictationhelper.screens
 
 import android.net.Uri

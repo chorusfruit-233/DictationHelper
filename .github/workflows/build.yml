@@ -124,5 +124,12 @@ jobs:
             ### APK
             - `DictationHelper-v${{ steps.version.outputs.version }}.apk` — 标准版
             ${{ inputs.bundle_vosk && format('- `DictationHelper-v{0}-with-models.apk` — 预装中/英文离线语音模型', steps.version.outputs.version) || '' }}
+
+            ### License
+            GPL-3.0-or-later
+
+            Source code for this release is available from the corresponding Git tag.
+
+            If this APK includes offline speech recognition models, see `THIRD_PARTY_LICENSES.md` for model sources and licenses.
           draft: false
           prerelease: false
