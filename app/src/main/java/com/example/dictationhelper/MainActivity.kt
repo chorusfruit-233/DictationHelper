@@ -33,6 +33,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -144,6 +146,15 @@ fun DictationHelperApp() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WordListScreen() {
+    var query by rememberSaveable { mutableStateOf("") }
+    var typeFilter by rememberSaveable { mutableStateOf("all") }
+    val normalizedQuery = query.trim().lowercase()
+    val visibleWords = WordRepository.words.filter { word ->
+        val typeMatches = typeFilter == "all" || word.type == typeFilter
+        val queryMatches = normalizedQuery.isBlank() || listOf(word.text, word.meaningZh, word.partOfSpeech)
+            .any { it.lowercase().contains(normalizedQuery) } || word.aliases.any { it.lowercase().contains(normalizedQuery) }
+        typeMatches && queryMatches
+    }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -165,15 +176,55 @@ fun WordListScreen() {
                 )
             }
         } else {
-            LazyColumn(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(WordRepository.words) { word ->
-                    WordCard(word)
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    singleLine = true,
+                    label = { Text("搜索单词、释义或别名") }
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf("all" to "全部", "word" to "单词", "phrase" to "短语").forEach { (value, label) ->
+                        FilterChip(
+                            selected = typeFilter == value,
+                            onClick = { typeFilter = value },
+                            label = { Text(label) }
+                        )
+                    }
+                }
+                Text(
+                    text = "显示 ${visibleWords.size} / ${WordRepository.words.size}",
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp
+                )
+                if (visibleWords.isEmpty()) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("没有匹配的词条", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(visibleWords, key = { it.id }) { word ->
+                            WordCard(word)
+                        }
+                    }
                 }
             }
         }
