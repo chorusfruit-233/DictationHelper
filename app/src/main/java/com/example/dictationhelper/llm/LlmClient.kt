@@ -94,11 +94,19 @@ object LlmClient {
         .build()
 
     private fun buildPrompt(words: List<WordItem>, customPrompt: String?): String {
-        val wordListJson = words.joinToString(", ") { w ->
-            """{"text":"${w.text}","meaningZh":"${w.meaningZh}","type":"${w.type}","partOfSpeech":"${w.partOfSpeech}","aliases":${w.aliases.joinToString(",") { "\"$it\"" }.let { "[$it]" }}}"""
-        }
+        val wordListJson = org.json.JSONArray().apply {
+            words.forEach { w ->
+                put(JSONObject().apply {
+                    put("text", w.text)
+                    put("meaningZh", w.meaningZh)
+                    put("type", w.type)
+                    put("partOfSpeech", w.partOfSpeech)
+                    put("aliases", org.json.JSONArray(w.aliases))
+                })
+            }
+        }.toString()
         val template = if (!customPrompt.isNullOrBlank()) customPrompt else DICTATION_PROMPT_TEMPLATE
-        return template.replace("{wordBank}", "当前词库：[$wordListJson]")
+        return template.replace("{wordBank}", "当前词库：$wordListJson")
     }
 
     private fun toPinyin(text: String): String {
@@ -148,7 +156,7 @@ object LlmClient {
                     .build()
 
                 val response = client.newCall(request).execute()
-                val responseBody = response.body?.string()
+                val responseBody = response.use { it.body?.string() }
 
                 if (!response.isSuccessful) {
                     val msg = responseBody?.let { try { JSONObject(it).optString("error", it.take(200)) } catch (_: Exception) { it.take(200) } } 
@@ -261,7 +269,7 @@ object LlmClient {
                     .build()
 
                 val response = client.newCall(request).execute()
-                val responseBody = response.body?.string()
+                val responseBody = response.use { it.body?.string() }
 
                 if (!response.isSuccessful) {
                     val msg = responseBody?.let {

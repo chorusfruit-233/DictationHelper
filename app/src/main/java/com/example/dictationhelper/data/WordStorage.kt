@@ -9,6 +9,11 @@ import android.content.Context
 import com.example.dictationhelper.model.WordItem
 import com.example.dictationhelper.model.WordList
 import org.json.JSONObject
+import java.io.File
+import java.io.FileOutputStream
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.nio.file.AtomicMoveNotSupportedException
 
 data class StorageData(
     val lists: List<WordList>,
@@ -82,8 +87,16 @@ object WordStorage {
                     }
                 })
             }
-            context.openFileOutput(FILENAME, Context.MODE_PRIVATE).use {
-                it.write(json.toString().toByteArray())
+            val target = File(context.filesDir, FILENAME)
+            val temp = File(context.filesDir, "$FILENAME.tmp")
+            FileOutputStream(temp).use { output ->
+                output.write(json.toString().toByteArray(Charsets.UTF_8))
+                output.fd.sync()
+            }
+            try {
+                Files.move(temp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+            } catch (_: AtomicMoveNotSupportedException) {
+                Files.move(temp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
             }
         } catch (_: Exception) {
         }

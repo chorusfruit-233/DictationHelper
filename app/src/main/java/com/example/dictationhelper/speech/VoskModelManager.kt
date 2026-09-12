@@ -7,6 +7,8 @@ package com.example.dictationhelper.speech
 
 import android.content.Context
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import java.io.BufferedInputStream
@@ -21,6 +23,7 @@ object VoskModelManager {
     val downloadProgress = mutableFloatStateOf(0f)
     val isDownloading = mutableStateOf(false)
     val downloadError = mutableStateOf<String?>(null)
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     fun modelDirForLang(lang: String) = if (lang == "en-US") MODEL_DIR_EN else MODEL_DIR_CN
 
@@ -99,46 +102,38 @@ object VoskModelManager {
 
         Thread {
             try {
-                val inputStream = context.contentResolver.openInputStream(uri)
-                    ?: throw Exception("无法打开文件")
-                val totalSize = inputStream.available().toLong()
-                var read = 0L
-
                 val tempFile = File(context.cacheDir, "vosk_import_${lang}.zip")
-                FileOutputStream(tempFile).use { output ->
-                    val buffer = ByteArray(8192)
-                    var bytesRead: Int
-                    while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                        output.write(buffer, 0, bytesRead)
-                        read += bytesRead
-                        if (totalSize > 0) {
-                            downloadProgress.floatValue = (read.toFloat() / totalSize).coerceAtMost(0.5f)
+                context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                    FileOutputStream(tempFile).use { output ->
+                        val buffer = ByteArray(8192)
+                        var bytesRead: Int
+                        while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                            output.write(buffer, 0, bytesRead)
                         }
                     }
-                }
-                inputStream.close()
+                } ?: throw Exception("无法打开文件")
 
                 val modelDir = File(context.filesDir, targetDir)
                 if (modelDir.exists()) modelDir.deleteRecursively()
                 modelDir.mkdirs()
 
-                downloadProgress.floatValue = 0.6f
+                mainHandler.post { downloadProgress.floatValue = 0.6f }
                 
                 // Collect entries to detect common root
-                val entryPairs = mutableListOf<Pair<String, java.util.zip.ZipEntry>>()
+                val entryPairs = mutableListOf<Pair<String, Boolean>>()
                 ZipInputStream(BufferedInputStream(tempFile.inputStream())).use { firstPass ->
                     var e = firstPass.nextEntry
                     while (e != null) {
-                        entryPairs.add(e.name to e)
+                        entryPairs.add(e.name to e.isDirectory)
                         e = firstPass.nextEntry
                     }
                 }
 
                 // Detect common root directory
                 val nonDirNames = entryPairs
-                    .filter { !it.second.isDirectory }
+                    .filter { !it.second }
                     .map { it.first }
-                val commonRoot = if (nonDirNames.all { it.contains("/") }) {
+                val commonRoot = if (nonDirNames.isNotEmpty() && nonDirNames.all { it.contains("/") }) {
                     val firstSlash = nonDirNames.first().indexOf("/")
                     val candidate = nonDirNames.first().substring(0, firstSlash + 1)
                     if (nonDirNames.all { it.startsWith(candidate) }) candidate else ""
@@ -154,6 +149,10 @@ object VoskModelManager {
                             entry.name
                         if (entryName.isNotEmpty()) {
                             val outFile = File(modelDir, entryName)
+                            val root = modelDir.canonicalFile
+                            if (outFile.canonicalFile != root && !outFile.canonicalPath.startsWith(root.path + File.separator)) {
+                                throw Exception("压缩包包含非法路径")
+                            }
                             if (entry.isDirectory) {
                                 outFile.mkdirs()
                             } else {
@@ -169,17 +168,21 @@ object VoskModelManager {
                 }
 
                 tempFile.delete()
-                downloadProgress.floatValue = 1f
-                isDownloading.value = false
+                mainHandler.post {
+                    downloadProgress.floatValue = 1f
+                    isDownloading.value = false
+                }
 
                 if (!isModelReady(context, lang)) {
                     throw Exception("导入的 zip 不是有效的 Vosk 语音模型")
                 }
-                onComplete(true)
+                mainHandler.post { onComplete(true) }
             } catch (e: Exception) {
-                isDownloading.value = false
-                downloadError.value = e.message ?: "导入失败"
-                onComplete(false)
+                mainHandler.post {
+                    isDownloading.value = false
+                    downloadError.value = e.message ?: "导入失败"
+                    onComplete(false)
+                }
             }
         }.start()
     }
