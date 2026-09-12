@@ -12,13 +12,23 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.example.dictationhelper.model.WordItem
 import com.example.dictationhelper.model.WordList
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 object WordRepository {
     val words = mutableStateListOf<WordItem>()
     val lists = mutableStateListOf<WordList>()
     var currentListId by mutableStateOf("")
+    private var appContext: Context? = null
+    private val saveScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var saveJob: Job? = null
 
     fun init(context: Context) {
+        appContext = context.applicationContext
         val saved = WordStorage.loadAll(context)
         lists.clear()
         if (saved.lists.isNotEmpty()) {
@@ -63,12 +73,14 @@ object WordRepository {
             currentListId = lists.first().id
             syncWordsFromCurrent()
         }
+        scheduleSave()
     }
 
     fun renameList(id: String, newName: String) {
         val index = lists.indexOfFirst { it.id == id }
         if (index < 0) return
         lists[index] = lists[index].copy(name = newName)
+        scheduleSave()
     }
 
     fun switchToList(id: String) {
@@ -78,11 +90,21 @@ object WordRepository {
         saveCurrentListState()
         currentListId = id
         syncWordsFromCurrent()
+        scheduleSave()
     }
 
     fun addWords(newWords: List<WordItem>) {
-        words.addAll(newWords)
+        val existingKeys = words.asSequence()
+            .map { it.text.trim().lowercase() }
+            .filter { it.isNotEmpty() }
+            .toMutableSet()
+        val uniqueWords = newWords.filter { word ->
+            val key = word.text.trim().lowercase()
+            key.isNotEmpty() && existingKeys.add(key)
+        }
+        words.addAll(uniqueWords)
         saveCurrentListState()
+        scheduleSave()
     }
 
     private fun saveCurrentListState() {
@@ -95,6 +117,17 @@ object WordRepository {
     fun save(context: Context) {
         saveCurrentListState()
         WordStorage.saveAll(context, lists.toList(), currentListId)
+    }
+
+    private fun scheduleSave() {
+        val context = appContext ?: return
+        val snapshot = lists.toList()
+        val selectedId = currentListId
+        saveJob?.cancel()
+        saveJob = saveScope.launch {
+            delay(250)
+            WordStorage.saveAll(context, snapshot, selectedId)
+        }
     }
 
     fun currentName(): String = lists.find { it.id == currentListId }?.name ?: ""
