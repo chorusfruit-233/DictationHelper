@@ -11,6 +11,12 @@ import android.os.Handler
 import android.os.Looper
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileOutputStream
@@ -24,6 +30,8 @@ object VoskModelManager {
     val isDownloading = mutableStateOf(false)
     val downloadError = mutableStateOf<String?>(null)
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var importJob: Job? = null
 
     fun modelDirForLang(lang: String) = if (lang == "en-US") MODEL_DIR_EN else MODEL_DIR_CN
 
@@ -94,13 +102,14 @@ object VoskModelManager {
 
     fun importFromUri(context: Context, lang: String, uri: Uri, onComplete: (Boolean) -> Unit) {
         if (isDownloading.value) return
+        importJob?.cancel()
         isDownloading.value = true
         downloadProgress.floatValue = 0f
         downloadError.value = null
 
         val targetDir = modelDirForLang(lang)
 
-        Thread {
+        importJob = scope.launch(Dispatchers.IO) {
             try {
                 val tempFile = File(context.cacheDir, "vosk_import_${lang}.zip")
                 context.contentResolver.openInputStream(uri)?.use { inputStream ->
@@ -177,6 +186,8 @@ object VoskModelManager {
                     throw Exception("导入的 zip 不是有效的 Vosk 语音模型")
                 }
                 mainHandler.post { onComplete(true) }
+            } catch (e: CancellationException) {
+                mainHandler.post { isDownloading.value = false }
             } catch (e: Exception) {
                 mainHandler.post {
                     isDownloading.value = false
@@ -184,6 +195,6 @@ object VoskModelManager {
                     onComplete(false)
                 }
             }
-        }.start()
+        }
     }
 }

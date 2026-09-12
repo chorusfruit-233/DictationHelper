@@ -9,12 +9,16 @@ import android.content.Context
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 private const val TAG = "Vosk"
@@ -31,7 +35,8 @@ class VoskRecognizer {
 
     private var recognizer: org.vosk.Recognizer? = null
     private var audioRecord: AudioRecord? = null
-    private var recognitionThread: Thread? = null
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var recognitionJob: Job? = null
     @Volatile private var shouldStop = false
     private var currentLang = ""
 
@@ -103,9 +108,12 @@ class VoskRecognizer {
             return
         }
 
-        recognitionThread = Thread {
+        recognitionJob?.cancel()
+        recognitionJob = scope.launch {
             var resultText = ""
+            var latestPartialText = ""
             try {
+                withContext(Dispatchers.IO) {
                 audioRecord?.startRecording()
                 Log.d(TAG, "recording started")
                 val buffer = ShortArray(bufferSize)
@@ -118,9 +126,9 @@ class VoskRecognizer {
                         val text = JSONObject(r).optString("text", "")
                         Log.d(TAG, "ACCEPT: text='$text'")
                         if (text.isNotBlank()) {
-                            partialText = ""
+                            withContext(Dispatchers.Main) { partialText = "" }
                             Log.d(TAG, "posting immediately: '$text'")
-                            Handler(Looper.getMainLooper()).post {
+                            withContext(Dispatchers.Main) {
                                 Log.d(TAG, "MAIN callback: '$text'")
                                 onResult?.invoke(text)
                             }
@@ -128,15 +136,21 @@ class VoskRecognizer {
                     } else {
                         val p = recognizer?.partialResult ?: "{}"
                         val text = JSONObject(p).optString("partial", "")
-                        if (text.isNotBlank()) partialText = text
+                        if (text.isNotBlank()) {
+                            latestPartialText = text
+                            withContext(Dispatchers.Main) { partialText = text }
+                        }
                     }
                 }
-                Log.d(TAG, "loop ended, result='$resultText' partial='$partialText'")
-                if (resultText.isEmpty() && partialText.isNotEmpty()) {
+                Log.d(TAG, "loop ended, result='$resultText' partial='$latestPartialText'")
+                if (resultText.isEmpty() && latestPartialText.isNotEmpty()) {
                     val fr = recognizer?.finalResult ?: "{}"
-                    resultText = JSONObject(fr).optString("text", "").ifBlank { partialText }
+                    resultText = JSONObject(fr).optString("text", "").ifBlank { latestPartialText }
                     Log.d(TAG, "final flush: resultText='$resultText'")
                 }
+                }
+            } catch (_: kotlinx.coroutines.CancellationException) {
+                Log.d(TAG, "recognition cancelled")
             } catch (e: Throwable) {
                 Log.e(TAG, "recognition error", e)
                 error = "识别错误: ${e.message}"
@@ -147,29 +161,30 @@ class VoskRecognizer {
                 isListening = false
             }
             Log.d(TAG, "thread done, resultText='$resultText', posting to main")
-            if (resultText.isNotBlank()) {
-                Handler(Looper.getMainLooper()).post {
+            if (resultText.isNotBlank() && !shouldStop) {
+                withContext(Dispatchers.Main) {
                     Log.d(TAG, "MAIN: invoking onResult with '$resultText'")
                     onResult?.invoke(resultText)
                 }
-            } else {
+            } else if (!shouldStop) {
                 Log.w(TAG, "resultText is blank, skipping")
-                Handler(Looper.getMainLooper()).post {
+                withContext(Dispatchers.Main) {
                     error = "未识别到文字，请确保语音模型与说话语言匹配"
                 }
             }
-        }.apply { start() }
+        }
     }
 
     fun stopListening() {
         Log.d(TAG, "stopListening")
         shouldStop = true
-        recognitionThread?.interrupt()
+        try { audioRecord?.stop() } catch (_: Exception) { }
+        recognitionJob?.cancel()
+        recognitionJob = null
     }
 
     fun destroy() {
         stopListening()
-        recognitionThread?.join(500)
         recognizer?.close()
         recognizer = null
         audioRecord?.release()

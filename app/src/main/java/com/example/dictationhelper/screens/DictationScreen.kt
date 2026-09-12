@@ -72,6 +72,7 @@ import com.example.dictationhelper.matching.RuleParser
 import com.example.dictationhelper.model.WordItem
 import com.example.dictationhelper.speech.VoskRecognizer
 import com.example.dictationhelper.ui.theme.ThemeSettings
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -98,6 +99,7 @@ fun DictationScreen(onBack: () -> Unit = {}) {
     var llmProcessing by remember { mutableStateOf(false) }
     var llmRawContent by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
+    var llmJob by remember { mutableStateOf<Job?>(null) }
 
     fun processAction(parsed: ParsedAction, prefix: String = "") {
         actionLabel = prefix + actionToLabel(parsed.action)
@@ -138,9 +140,10 @@ fun DictationScreen(onBack: () -> Unit = {}) {
         val usingLlm = ThemeSettings.useLlm
         val config = AiConfigManager.getDictationConfig()
         if (usingLlm && config.apiKey.isNotBlank()) {
+            llmJob?.cancel()
             llmProcessing = true
             actionLabel = "🤖 AI 解析中..."
-            scope.launch {
+            llmJob = scope.launch {
                 val customPrompt = context.getSharedPreferences("app_settings", android.content.Context.MODE_PRIVATE)
                     .getString("dictation_prompt", "")?.takeIf { it.isNotBlank() }
                 val result = LlmClient.parse(text, config, WordRepository.words, customPrompt)

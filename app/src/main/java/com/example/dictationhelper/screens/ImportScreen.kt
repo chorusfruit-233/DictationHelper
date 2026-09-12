@@ -55,6 +55,7 @@ import com.example.dictationhelper.llm.AiConfigManager
 import com.example.dictationhelper.llm.LlmClient
 import com.example.dictationhelper.model.WordItem
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -92,6 +93,7 @@ internal val DEFAULT_VISION_PROMPT = """
 fun ImportScreen(onBack: () -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var visionJob by remember { mutableStateOf<Job?>(null) }
 
     var inputText by remember { mutableStateOf("") }
     var parsedItems = remember { mutableStateListOf<EditableWordItem>() }
@@ -112,6 +114,7 @@ fun ImportScreen(onBack: () -> Unit = {}) {
             val result = loadImageBase64(context, uri)
             pickedImageBase64 = result.first
             pickedImageType = result.second
+            parseMessage = if (result.first.isEmpty()) "图片读取失败或超过 12 MB 限制" else ""
         }
     }
 
@@ -142,8 +145,9 @@ fun ImportScreen(onBack: () -> Unit = {}) {
                 aiLoading = aiLoading,
                 onPickImage = { imagePicker.launch("image/*") },
                 onVisionAi = {
+                    visionJob?.cancel()
                     aiLoading = true
-                    scope.launch {
+                    visionJob = scope.launch {
                         val prefs = context.getSharedPreferences("app_settings", android.content.Context.MODE_PRIVATE)
                         val prompt = prefs.getString("vision_prompt", "")?.takeIf { it.isNotBlank() }
                             ?: DEFAULT_VISION_PROMPT
@@ -342,7 +346,7 @@ private fun ReviewView(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            itemsIndexed(items) { index, item ->
+            itemsIndexed(items, key = { _, item -> item.id }) { index, item ->
                 EditableItemCard(
                     item = item,
                     onTextChange = { items[index] = items[index].copy(text = it) },
@@ -462,8 +466,13 @@ private fun EditableItemCard(
 private suspend fun loadImageBase64(context: android.content.Context, uri: Uri): Pair<String, String> {
     return withContext(Dispatchers.IO) {
         try {
+            val maxBytes = 12L * 1024 * 1024
+            context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { descriptor ->
+                if (descriptor.length > maxBytes) return@withContext "" to "jpeg"
+            }
             val inputStream = context.contentResolver.openInputStream(uri)
             val bytes = inputStream?.use { it.readBytes() } ?: return@withContext "" to "jpeg"
+            if (bytes.size > maxBytes) return@withContext "" to "jpeg"
             val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
             val type = mimeType.substringAfterLast("/", "jpeg")
             Base64.encodeToString(bytes, Base64.NO_WRAP) to type

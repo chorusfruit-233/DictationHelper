@@ -16,6 +16,9 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 data class LlmConfig(
     val apiUrl: String = "https://api.openai.com/v1/chat/completions",
@@ -93,6 +96,21 @@ object LlmClient {
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
+    private suspend fun execute(request: Request): okhttp3.Response =
+        suspendCancellableCoroutine { continuation ->
+            val call = client.newCall(request)
+            continuation.invokeOnCancellation { call.cancel() }
+            call.enqueue(object : okhttp3.Callback {
+                override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
+                    if (continuation.isActive) continuation.resumeWithException(e)
+                }
+
+                override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+                    if (continuation.isActive) continuation.resume(response) else response.close()
+                }
+            })
+        }
+
     private fun buildPrompt(words: List<WordItem>, customPrompt: String?): String {
         val wordListJson = org.json.JSONArray().apply {
             words.forEach { w ->
@@ -155,7 +173,7 @@ object LlmClient {
                     .post(body)
                     .build()
 
-                val response = client.newCall(request).execute()
+                val response = execute(request)
                 val responseBody = response.use { it.body?.string() }
 
                 if (!response.isSuccessful) {
@@ -268,7 +286,7 @@ object LlmClient {
                     .post(body)
                     .build()
 
-                val response = client.newCall(request).execute()
+                val response = execute(request)
                 val responseBody = response.use { it.body?.string() }
 
                 if (!response.isSuccessful) {
