@@ -40,6 +40,9 @@ jobs:
           VERSION=$(grep 'versionName' app/build.gradle.kts | grep -oP '"\K[^"]+')
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
+      - name: Run unit tests
+        run: ./gradlew testDebugUnitTest
+
       - name: Build standard APK
         run: ./gradlew assembleRelease
         env:

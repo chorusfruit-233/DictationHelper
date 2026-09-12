@@ -158,7 +158,7 @@ object Matcher {
 
     private fun parseMeaningZh(text: String): String? {
         val patterns = listOf(
-            Regex("""中文\s*[是：:]\s*([\u4e00-\u9fff；;，,、]+)"""),
+            Regex("""中文\s*[是：:]\s*([\u4e00-\u9fff]+)"""),
             Regex("""中文\s+([\u4e00-\u9fff]+)"""),
             Regex("""意思是?\s*([\u4e00-\u9fff]+)""")
         )
