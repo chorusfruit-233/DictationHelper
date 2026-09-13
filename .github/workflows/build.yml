@@ -11,6 +11,10 @@ on:
         description: 'Also build APK with pre-installed Vosk models (CN+EN)'
         type: boolean
         default: true
+      bundle_sherpa:
+        description: 'Also build APK with the official sherpa-onnx streaming model (~511MB)'
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -95,8 +99,34 @@ jobs:
           unzip -q /tmp/vosk-cache/vosk_en.zip -d /tmp/vosk_en
           mv /tmp/vosk_en/*/* app/src/main/assets/vosk_model_en/
 
+      - name: Restore sherpa model cache
+        if: ${{ inputs.bundle_sherpa }}
+        id: sherpa-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/sherpa-cache
+          key: sherpa-onnx-streaming-bilingual-zh-en-2023-02-20
+
+      - name: Download sherpa model
+        if: ${{ inputs.bundle_sherpa && steps.sherpa-cache.outputs.cache-hit != 'true' }}
+        run: |
+          mkdir -p /tmp/sherpa-cache
+          curl -L --connect-timeout 30 --max-time 1800 \
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20.tar.bz2" \
+            -o /tmp/sherpa-cache/sherpa_model.tar.bz2
+
+      - name: Extract sherpa model to assets
+        if: ${{ inputs.bundle_sherpa }}
+        run: |
+          rm -rf /tmp/sherpa_model app/src/main/assets/sherpa_model_streaming
+          mkdir -p /tmp/sherpa_model app/src/main/assets/sherpa_model_streaming
+          tar -xjf /tmp/sherpa-cache/sherpa_model.tar.bz2 -C /tmp/sherpa_model
+          MODEL_ROOT=$(find /tmp/sherpa_model -name tokens.txt -printf '%h\n' | head -1)
+          test -n "$MODEL_ROOT"
+          cp -a "$MODEL_ROOT"/. app/src/main/assets/sherpa_model_streaming/
+
       - name: Build APK with models
-        if: ${{ inputs.bundle_vosk }}
+        if: ${{ inputs.bundle_vosk || inputs.bundle_sherpa }}
         run: |
           ./gradlew assembleRelease
           mv app/build/outputs/apk/release/*.apk \
@@ -127,6 +157,7 @@ jobs:
             ### APK
             - `DictationHelper-v${{ steps.version.outputs.version }}.apk` — 标准版
             ${{ inputs.bundle_vosk && format('- `DictationHelper-v{0}-with-models.apk` — 预装中/英文离线语音模型', steps.version.outputs.version) || '' }}
+            ${{ inputs.bundle_sherpa && format('- `DictationHelper-v{0}-with-models.apk` — 预装 sherpa-onnx 中英流式模型', steps.version.outputs.version) || '' }}
 
             ### License
             GPL-3.0-or-later

@@ -32,6 +32,9 @@ This project uses third-party libraries, models, and resources. Their licenses a
 
 The bundled native runtime includes ONNX Runtime components, licensed under the MIT License.
 
+The optional bundled sherpa-onnx model is downloaded from the official sherpa-onnx release
+and is not included in the standard APK. Verify the model license before redistribution.
+
 ## Vosk Speech Models
 
 Before distributing APK files that include offline speech models, verify and document the license of each model package.

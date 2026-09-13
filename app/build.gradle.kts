@@ -106,4 +106,5 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("com.alphacephei:vosk-android:0.3.47")
+    implementation("org.apache.commons:commons-compress:1.27.1")
 }

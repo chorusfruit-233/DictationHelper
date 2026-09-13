@@ -21,7 +21,7 @@
 - 确认/排除候选词
 
 ### AI 语义解析
-- 接入 OpenAI 兼容 LLM（GPT-4o / Groq / DeepSeek / Ollama 等）
+- 接入 OpenAI 兼容 LLM（DeepSeek / Groq / OpenAI-compatible API / Ollama 等）
 - 将老师的自然语言指令解析为结构化查询
 - 支持中英文谐音纠错（语音识别产生的同音字自动还原）
 - 拼音辅助（自动将中文谐音转为拼音供 LLM 理解）
@@ -30,7 +30,7 @@
 
 ### 视觉 AI 导入
 - 拍照或从相册选择课本单词表
-- 发送给视觉大模型（GPT-4o 等）自动识别单词表结构
+- 发送给视觉大模型（默认 DeepSeek `deepseek-flash`）自动识别单词表结构
 - 直接输出标准词库 JSON
 - 自定义 Prompt 模板
 
@@ -139,6 +139,7 @@ storeFile=../app/your-keystore.jks
 应用内置 sherpa-onnx 推理库，但不内置模型。请从 sherpa-onnx 官方模型列表下载包含
 `tokens.txt`、`encoder*.onnx`、`decoder*.onnx` 和 `joiner*.onnx` 的流式 Zipformer 模型，
 在设置 → 语音设置 → sherpa-onnx 模型中导入。安装后启用 sherpa-onnx 即可进行离线中英文识别。
+应用也提供“下载官方模型”按钮，可直接下载并安装该模型；下载过程支持取消。
 
 ## AI 配置
 
@@ -146,9 +147,9 @@ storeFile=../app/your-keystore.jks
 
 | 服务 | API 地址 | 推荐模型 |
 |------|----------|----------|
-| OpenAI | `https://api.openai.com/v1/chat/completions` | `gpt-4o` |
+| DeepSeek | `https://api.deepseek.com/v1/chat/completions` | `deepseek-flash` |
 | Groq (免费) | `https://api.groq.com/openai/v1/chat/completions` | `llama-3.3-70b-versatile` |
-| DeepSeek | `https://api.deepseek.com/v1/chat/completions` | `deepseek-chat` |
+| OpenAI-compatible service | configurable | configurable |
 | 本地 Ollama | `http://<IP>:11434/v1/chat/completions` | `llama3.2` |
 
 ## CI/CD
@@ -158,6 +159,7 @@ GitHub Actions 手动触发：Actions → **Build & Release** → **Run workflow
 可选参数：
 - `Create Release` — 发布 GitHub Release（Tag 使用 `versionName`）
 - `Also build with Vosk models` — 额外构建预装中英文离线模型的 APK
+- `Also build with sherpa-onnx model` — 额外构建预装官方中英流式模型的 APK（模型约 500MB）
 
 **构建产物**（Release APK，R8 优化 + 签名 + 去日志）：
 - `DictationHelper-v{version}.apk` — 标准版

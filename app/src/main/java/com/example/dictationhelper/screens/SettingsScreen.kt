@@ -794,15 +794,26 @@ fun SherpaModelImportDialog(onDismiss: () -> Unit) {
         SherpaModelManager.importFromUri(context, uri) { success -> status = if (success) "done" else "error" }
     }
     AlertDialog(
-        onDismissRequest = { if (status != "importing") onDismiss() },
+        onDismissRequest = {
+            if (status == "importing") {
+                SherpaModelManager.cancelImport()
+                status = "idle"
+            } else onDismiss()
+        },
         title = { Text("安装 sherpa-onnx 模型") },
         text = {
             Column {
                 when (status) {
                     "idle" -> Text("请选择 sherpa-onnx 流式 Zipformer 模型压缩包。模型通常较大，建议使用官方 bilingual zh-en 流式模型。")
                     "importing" -> {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                        Text("正在导入模型，请保持应用打开", modifier = Modifier.padding(top = 8.dp))
+                        LinearProgressIndicator(
+                            progress = { SherpaModelManager.progress.floatValue },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Text(
+                            "正在下载/导入模型，请保持应用打开 (${(SherpaModelManager.progress.floatValue * 100).toInt()}%)",
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
                     }
                     "done" -> Text("模型安装成功，现在可以启用 sherpa-onnx。", color = MaterialTheme.colorScheme.primary)
                     else -> Text("导入失败：${SherpaModelManager.error.value ?: "模型格式无效"}", color = MaterialTheme.colorScheme.error)
@@ -811,9 +822,20 @@ fun SherpaModelImportDialog(onDismiss: () -> Unit) {
         },
         confirmButton = {
             if (status == "idle" || status == "error") {
-                Button(onClick = { picker.launch("application/zip") }) { Text("选择模型") }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { picker.launch("application/octet-stream") }) { Text("选择文件") }
+                    Button(onClick = {
+                        status = "importing"
+                        SherpaModelManager.downloadOfficialModel(context) { success -> status = if (success) "done" else "error" }
+                    }) { Text("下载官方模型") }
+                }
             } else if (status == "done") {
                 Button(onClick = onDismiss) { Text("完成") }
+            } else {
+                OutlinedButton(onClick = {
+                    SherpaModelManager.cancelImport()
+                    status = "idle"
+                }) { Text("取消下载") }
             }
         },
         dismissButton = {
