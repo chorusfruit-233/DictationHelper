@@ -21,18 +21,18 @@ class SherpaModelFilesTest {
     private fun model(name: String): File = folder.newFile(name)
 
     @Test
-    fun prefersInt8EvenWhenTheFp32VariantSortsFirst() {
-        model("encoder-aaa.onnx")
-        val int8 = model("encoder-zzz.int8.onnx")
+    fun prefersFp32EvenWhenTheInt8VariantSortsFirst() {
+        model("encoder-aaa.int8.onnx")
+        val fp32 = model("encoder-zzz.onnx")
 
-        assertEquals(int8, SherpaModelFiles.find(folder.root, "encoder"))
+        assertEquals(fp32, SherpaModelFiles.find(folder.root, "encoder"))
     }
 
     @Test
-    fun fallsBackToFp32WhenOnlyOneVariantExists() {
-        val fp32 = model("joiner-epoch-99-avg-1.onnx")
+    fun fallsBackToInt8WhenOnlyQuantizedWeightsExist() {
+        val int8 = model("joiner-epoch-99-avg-1.int8.onnx")
 
-        assertEquals(fp32, SherpaModelFiles.find(folder.root, "joiner"))
+        assertEquals(int8, SherpaModelFiles.find(folder.root, "joiner"))
     }
 
     @Test
@@ -55,19 +55,19 @@ class SherpaModelFilesTest {
 
     @Test
     fun pruneKeepsSelectedWeightsAndDropsTheRest() {
-        val encoder = model("encoder-epoch-99-avg-1.int8.onnx")
-        val decoder = model("decoder-epoch-99-avg-1.int8.onnx")
-        val joiner = model("joiner-epoch-99-avg-1.int8.onnx")
+        val encoder = model("encoder-epoch-99-avg-1.onnx")
+        val decoder = model("decoder-epoch-99-avg-1.onnx")
+        val joiner = model("joiner-epoch-99-avg-1.onnx")
         val tokens = model("tokens.txt")
-        val fp32Encoder = model("encoder-epoch-99-avg-1.onnx")
-        val fp32Decoder = model("decoder-epoch-99-avg-1.onnx")
-        val fp32Joiner = model("joiner-epoch-99-avg-1.onnx")
+        val int8Encoder = model("encoder-epoch-99-avg-1.int8.onnx")
+        val int8Decoder = model("decoder-epoch-99-avg-1.int8.onnx")
+        val int8Joiner = model("joiner-epoch-99-avg-1.int8.onnx")
         val samples = folder.newFolder("test_wavs")
         val sample = File(samples, "0.wav").apply { writeText("audio") }
 
         SherpaModelFiles.pruneUnusedWeights(folder.root)
 
         listOf(encoder, decoder, joiner, tokens).forEach { assertTrue("${it.name} was removed", it.exists()) }
-        listOf(fp32Encoder, fp32Decoder, fp32Joiner, sample).forEach { assertFalse("${it.name} was kept", it.exists()) }
+        listOf(int8Encoder, int8Decoder, int8Joiner, sample).forEach { assertFalse("${it.name} was kept", it.exists()) }
     }
 }

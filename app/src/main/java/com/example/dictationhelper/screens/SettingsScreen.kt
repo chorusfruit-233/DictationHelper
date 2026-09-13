@@ -318,7 +318,7 @@ fun SettingsScreen() {
                         description = when {
                             SherpaModelManager.isPreparing.value ->
                                 "首次启用：正在复制内置模型 ${SherpaModelManager.copiedBytes.longValue / 1024 / 1024} MB，请稍候"
-                            sherpaReady -> "已安装流式模型，适合中英文听写"
+                            sherpaReady -> "已安装流式模型（${SherpaModelManager.installedPrecision(context) ?: "未知精度"}），适合中英文听写"
                             else -> "需导入 sherpa-onnx 流式模型（模型较大）"
                         },
                         checked = ThemeSettings.useSherpaOffline,
@@ -338,7 +338,7 @@ fun SettingsScreen() {
                         summary = when {
                             SherpaModelManager.isPreparing.value ->
                                 "正在准备内置模型 ${SherpaModelManager.copiedBytes.longValue / 1024 / 1024} MB"
-                            sherpaReady -> "已安装 ✓"
+                            sherpaReady -> "已安装 ✓ ${SherpaModelManager.installedPrecision(context) ?: ""}"
                             else -> "未安装"
                         },
                         summaryColor = if (sherpaReady) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,

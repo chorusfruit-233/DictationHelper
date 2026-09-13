@@ -55,6 +55,10 @@ object SherpaModelManager {
         return isReady(modelDirectory(context))
     }
 
+    /** "fp32" or "int8" for the installed model, or null when nothing is installed. */
+    fun installedPrecision(context: Context): String? =
+        SherpaModelFiles.find(modelDirectory(context), "encoder")?.let { SherpaModelFiles.precisionOf(it) }
+
     /**
      * Checks the installed model and, for bundled APKs, copies the asset model on IO.
      * Keeping this separate from [isReady] makes UI recomposition a cheap operation.
