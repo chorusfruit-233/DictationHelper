@@ -129,7 +129,9 @@ jobs:
         if: ${{ inputs.bundle_vosk }}
         run: |
           rm -rf app/src/main/assets/sherpa_model_streaming
-          ./gradlew assembleRelease
+          ./gradlew clean assembleRelease
+          unzip -l app/build/outputs/apk/release/*.apk | grep -q 'assets/vosk_model_cn/'
+          unzip -l app/build/outputs/apk/release/*.apk | grep -q 'assets/vosk_model_en/'
           mv app/build/outputs/apk/release/*.apk \
             "DictationHelper-v${{ steps.version.outputs.version }}-with-vosk-models.apk"
         env:
@@ -142,7 +144,8 @@ jobs:
         if: ${{ inputs.bundle_sherpa }}
         run: |
           rm -rf app/src/main/assets/vosk_model_cn app/src/main/assets/vosk_model_en
-          ./gradlew assembleRelease
+          ./gradlew clean assembleRelease
+          unzip -l app/build/outputs/apk/release/*.apk | grep -q 'assets/sherpa_model_streaming/'
           mv app/build/outputs/apk/release/*.apk \
             "DictationHelper-v${{ steps.version.outputs.version }}-with-sherpa-model.apk"
         env:
