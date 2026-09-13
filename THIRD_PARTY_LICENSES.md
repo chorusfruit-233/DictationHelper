@@ -18,6 +18,12 @@ This project uses third-party libraries, models, and resources. Their licenses a
 - License: Apache License 2.0
 - Source: https://square.github.io/okhttp/
 
+## Apache Commons Compress
+
+- Library: `org.apache.commons:commons-compress:1.27.1`
+- License: Apache License 2.0
+- Source: https://commons.apache.org/proper/commons-compress/
+
 ## Vosk Android SDK
 
 - Library: `com.alphacephei:vosk-android`
