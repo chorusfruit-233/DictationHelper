@@ -57,6 +57,7 @@ import com.example.dictationhelper.llm.AiConfigManager
 import com.example.dictationhelper.llm.AiProfile
 import com.example.dictationhelper.llm.DICTATION_PROMPT_TEMPLATE
 import com.example.dictationhelper.speech.VoskModelManager
+import com.example.dictationhelper.speech.SherpaModelManager
 import com.example.dictationhelper.ui.theme.ThemeSettings
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -278,7 +279,9 @@ fun SettingsScreen() {
                     val enReady = VoskModelManager.isModelReady(context, "en-US")
                     var showCnModelDialog by remember { mutableStateOf(false) }
                     var showEnModelDialog by remember { mutableStateOf(false) }
+                    var showSherpaModelDialog by remember { mutableStateOf(false) }
                     val anyReady = cnReady || enReady
+                    val sherpaReady = SherpaModelManager.isReady(context)
 
                     SettingsSwitchRow(
                         label = "离线语音识别 (Vosk)",
@@ -294,9 +297,34 @@ fun SettingsScreen() {
                                 showCnModelDialog = true
                             } else {
                                 ThemeSettings.useVoskOffline = it
+                                if (it) ThemeSettings.useSherpaOffline = false
                                 ThemeSettings.save(context)
                             }
                         }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    SettingsSwitchRow(
+                        label = "离线语音识别 (sherpa-onnx)",
+                        description = if (sherpaReady) "已安装流式模型，适合中英文听写" else "需导入 sherpa-onnx 流式模型（模型较大）",
+                        checked = ThemeSettings.useSherpaOffline,
+                        onCheckedChange = {
+                            if (it && !sherpaReady) showSherpaModelDialog = true
+                            else {
+                                ThemeSettings.useSherpaOffline = it
+                                ThemeSettings.useVoskOffline = false
+                                ThemeSettings.save(context)
+                            }
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingsClickRow(
+                        label = "sherpa-onnx 模型",
+                        summary = if (sherpaReady) "已安装 ✓" else "未安装",
+                        summaryColor = if (sherpaReady) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        onClick = { showSherpaModelDialog = true }
                     )
 
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
@@ -332,6 +360,9 @@ fun SettingsScreen() {
                             hint = "vosk-model-small-en-us-0.15.zip (~40MB)",
                             onDismiss = { showEnModelDialog = false }
                         )
+                    }
+                    if (showSherpaModelDialog) {
+                        SherpaModelImportDialog(onDismiss = { showSherpaModelDialog = false })
                     }
                 }
             }
@@ -754,6 +785,44 @@ fun PromptEditDialog(
 }
 
 @Composable
+fun SherpaModelImportDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    var status by remember { mutableStateOf("idle") }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        status = "importing"
+        SherpaModelManager.importFromUri(context, uri) { success -> status = if (success) "done" else "error" }
+    }
+    AlertDialog(
+        onDismissRequest = { if (status != "importing") onDismiss() },
+        title = { Text("安装 sherpa-onnx 模型") },
+        text = {
+            Column {
+                when (status) {
+                    "idle" -> Text("请选择 sherpa-onnx 流式 Zipformer 模型压缩包。模型通常较大，建议使用官方 bilingual zh-en 流式模型。")
+                    "importing" -> {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        Text("正在导入模型，请保持应用打开", modifier = Modifier.padding(top = 8.dp))
+                    }
+                    "done" -> Text("模型安装成功，现在可以启用 sherpa-onnx。", color = MaterialTheme.colorScheme.primary)
+                    else -> Text("导入失败：${SherpaModelManager.error.value ?: "模型格式无效"}", color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
+        confirmButton = {
+            if (status == "idle" || status == "error") {
+                Button(onClick = { picker.launch("application/zip") }) { Text("选择模型") }
+            } else if (status == "done") {
+                Button(onClick = onDismiss) { Text("完成") }
+            }
+        },
+        dismissButton = {
+            if (status != "importing") TextButton(onClick = onDismiss) { Text("取消") }
+        }
+    )
+}
+
+@Composable
 fun VoskModelDownloadDialog(
     lang: String,
     label: String,
@@ -853,4 +922,3 @@ fun VoskModelDownloadDialog(
         }
     }
 }
-

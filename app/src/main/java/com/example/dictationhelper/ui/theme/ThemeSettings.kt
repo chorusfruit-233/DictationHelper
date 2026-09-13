@@ -19,6 +19,7 @@ object ThemeSettings {
     var uiScale by mutableFloatStateOf(1.0f)
     var useLlm by mutableStateOf(false)
     var useVoskOffline by mutableStateOf(false)
+    var useSherpaOffline by mutableStateOf(false)
 
     fun load(context: Context) {
         val prefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
@@ -29,6 +30,7 @@ object ThemeSettings {
         uiScale = prefs.getFloat("ui_scale", 1.0f)
         useLlm = prefs.getBoolean("use_llm", false)
         useVoskOffline = prefs.getBoolean("use_vosk_offline", false)
+        useSherpaOffline = prefs.getBoolean("use_sherpa_offline", false)
     }
 
     fun save(context: Context) {
@@ -41,6 +43,7 @@ object ThemeSettings {
             .putFloat("ui_scale", uiScale)
             .putBoolean("use_llm", useLlm)
             .putBoolean("use_vosk_offline", useVoskOffline)
+            .putBoolean("use_sherpa_offline", useSherpaOffline)
             .apply()
     }
 }

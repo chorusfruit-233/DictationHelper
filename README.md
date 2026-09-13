@@ -134,6 +134,12 @@ storeFile=../app/your-keystore.jks
 
 下载 zip 后通过 App 导入即可离线使用。
 
+### sherpa-onnx 流式模型
+
+应用内置 sherpa-onnx 推理库，但不内置模型。请从 sherpa-onnx 官方模型列表下载包含
+`tokens.txt`、`encoder*.onnx`、`decoder*.onnx` 和 `joiner*.onnx` 的流式 Zipformer 模型，
+在设置 → 语音设置 → sherpa-onnx 模型中导入。安装后启用 sherpa-onnx 即可进行离线中英文识别。
+
 ## AI 配置
 
 支持 OpenAI 兼容 API，常见配置示例：
