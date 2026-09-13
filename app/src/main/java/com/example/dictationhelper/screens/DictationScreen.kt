@@ -186,14 +186,17 @@ fun DictationScreen(onBack: () -> Unit = {}) {
     }
     val useVosk = ThemeSettings.useVoskOffline
     val useSherpa = ThemeSettings.useSherpaOffline
-    LaunchedEffect(useVosk, useSherpa, speechLang) {
-        Log.d("Dictation", "LaunchedEffect: useVosk=$useVosk speechLang=$speechLang")
+    LaunchedEffect(useVosk, speechLang) {
+        Log.d("Dictation", "Vosk language effect: useVosk=$useVosk speechLang=$speechLang")
         if (useVosk) {
             val ok = voskRecognizer.init(context, speechLang)
             Log.d("Dictation", "init result=$ok")
         } else {
             voskRecognizer.destroy()
         }
+    }
+    LaunchedEffect(useSherpa) {
+        Log.d("Dictation", "Sherpa effect: useSherpa=$useSherpa")
         if (useSherpa) {
             sherpaRecognizer.init(context)
         } else {
@@ -240,33 +243,45 @@ fun DictationScreen(onBack: () -> Unit = {}) {
 
             // --- microphone section ---
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                if (useSherpa) {
                     OutlinedButton(
-                        onClick = { speechLang = "zh-CN" },
-                        modifier = Modifier.weight(1f).height(36.dp),
-                        colors = if (speechLang == "zh-CN")
-                            ButtonDefaults.outlinedButtonColors(
-                                containerColor = MaterialTheme.colorScheme.primaryContainer
-                            )
-                        else
-                            ButtonDefaults.outlinedButtonColors()
+                        onClick = {},
+                        modifier = Modifier.fillMaxWidth().height(36.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                        )
                     ) {
-                        Text("中文", fontSize = 13.sp)
+                        Text("中英双语（sherpa-onnx）", fontSize = 13.sp)
                     }
-                    OutlinedButton(
-                        onClick = { speechLang = "en-US" },
-                        modifier = Modifier.weight(1f).height(36.dp),
-                        colors = if (speechLang == "en-US")
-                            ButtonDefaults.outlinedButtonColors(
-                                containerColor = MaterialTheme.colorScheme.primaryContainer
-                            )
-                        else
-                            ButtonDefaults.outlinedButtonColors()
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("English", fontSize = 13.sp)
+                        OutlinedButton(
+                            onClick = { speechLang = "zh-CN" },
+                            modifier = Modifier.weight(1f).height(36.dp),
+                            colors = if (speechLang == "zh-CN")
+                                ButtonDefaults.outlinedButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                                )
+                            else
+                                ButtonDefaults.outlinedButtonColors()
+                        ) {
+                            Text("中文", fontSize = 13.sp)
+                        }
+                        OutlinedButton(
+                            onClick = { speechLang = "en-US" },
+                            modifier = Modifier.weight(1f).height(36.dp),
+                            colors = if (speechLang == "en-US")
+                                ButtonDefaults.outlinedButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                                )
+                            else
+                                ButtonDefaults.outlinedButtonColors()
+                        ) {
+                            Text("English", fontSize = 13.sp)
+                        }
                     }
                 }
             }
