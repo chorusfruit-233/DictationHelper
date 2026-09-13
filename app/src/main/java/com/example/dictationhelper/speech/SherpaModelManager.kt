@@ -10,6 +10,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -34,6 +35,8 @@ object SherpaModelManager {
     private const val MODEL_DIR = "sherpa_model_streaming"
     const val OFFICIAL_MODEL_URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20.tar.bz2"
     val isImporting = mutableStateOf(false)
+    val isPreparing = mutableStateOf(false)
+    val copiedBytes = mutableLongStateOf(0L)
     val progress = mutableFloatStateOf(0f)
     val error = mutableStateOf<String?>(null)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -55,29 +58,46 @@ object SherpaModelManager {
      * Checks the installed model and, for bundled APKs, copies the asset model on IO.
      * Keeping this separate from [isReady] makes UI recomposition a cheap operation.
      */
-    suspend fun ensureReady(context: Context): Boolean = withContext(Dispatchers.IO) {
-        try {
-            assetsCopyMutex.withLock {
-                val target = modelDirectory(context)
-                if (isReady(target)) return@withLock true
-                if (context.assets.list(MODEL_DIR).isNullOrEmpty()) return@withLock false
-
-                val staging = File(context.cacheDir, "$MODEL_DIR-assets-staging")
-                if (staging.exists()) staging.deleteRecursively()
-                copyAssets(context, MODEL_DIR, staging)
-                if (!isReady(staging)) throw IllegalStateException("内置 sherpa 模型不完整")
-                if (target.exists()) target.deleteRecursively()
-                if (!staging.renameTo(target)) {
-                    staging.copyRecursively(target, overwrite = true)
-                    staging.deleteRecursively()
-                }
-                isReady(target)
-            }
+    suspend fun ensureReady(context: Context): Boolean {
+        if (isReady(context)) return true
+        if (!hasBundledAssets(context)) return false
+        isPreparing.value = true
+        copiedBytes.longValue = 0
+        preparedBytes = 0
+        lastPreparePost = 0
+        return try {
+            withContext(Dispatchers.IO) { prepareFromAssets(context) }
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
             false
+        } finally {
+            isPreparing.value = false
+            copiedBytes.longValue = 0
+            preparedBytes = 0
         }
+    }
+
+    private fun hasBundledAssets(context: Context): Boolean = try {
+        !context.assets.list(MODEL_DIR).isNullOrEmpty()
+    } catch (_: Exception) {
+        false
+    }
+
+    private suspend fun prepareFromAssets(context: Context): Boolean = assetsCopyMutex.withLock {
+        val target = modelDirectory(context)
+        if (isReady(target)) return@withLock true
+
+        val staging = File(context.cacheDir, "$MODEL_DIR-assets-staging")
+        if (staging.exists()) staging.deleteRecursively()
+        copyAssets(context, MODEL_DIR, staging)
+        if (!isReady(staging)) throw IllegalStateException("内置 sherpa 模型不完整")
+        if (target.exists()) target.deleteRecursively()
+        if (!staging.renameTo(target)) {
+            staging.copyRecursively(target, overwrite = true)
+            staging.deleteRecursively()
+        }
+        isReady(target)
     }
 
     private fun isReady(dir: File): Boolean {
@@ -94,7 +114,29 @@ object SherpaModelManager {
             val child = File(target, name)
             val nested = context.assets.list(childAsset)
             if (!nested.isNullOrEmpty()) copyAssets(context, childAsset, child)
-            else context.assets.open(childAsset).use { input -> child.outputStream().use { output -> input.copyTo(output) } }
+            else context.assets.open(childAsset).use { input ->
+                child.outputStream().use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    var count: Int
+                    while (input.read(buffer).also { count = it } != -1) {
+                        output.write(buffer, 0, count)
+                        reportCopiedBytes(count)
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Publishes the copied byte count at most every 250 ms; the copy runs on IO and a
+     * per-chunk state write would recompose the caller thousands of times.
+     */
+    private fun reportCopiedBytes(count: Int) {
+        preparedBytes += count
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - lastPreparePost >= 250L) {
+            lastPreparePost = now
+            copiedBytes.longValue = preparedBytes
         }
     }
 
@@ -191,6 +233,8 @@ object SherpaModelManager {
     }
 
     private var lastProgressPost = 0L
+    private var preparedBytes = 0L
+    private var lastPreparePost = 0L
 
     private suspend fun installArchive(context: Context, archive: File) {
         val target = modelDirectory(context)

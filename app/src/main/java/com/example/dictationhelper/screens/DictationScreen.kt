@@ -72,6 +72,7 @@ import com.example.dictationhelper.matching.RuleParser
 import com.example.dictationhelper.model.WordItem
 import com.example.dictationhelper.speech.VoskRecognizer
 import com.example.dictationhelper.speech.SherpaRecognizer
+import com.example.dictationhelper.speech.SherpaModelManager
 import com.example.dictationhelper.ui.theme.ThemeSettings
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -286,6 +287,26 @@ fun DictationScreen(onBack: () -> Unit = {}) {
                 }
             }
             item {
+                if (useSherpa && SherpaModelManager.isPreparing.value) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text("首次启用：正在把内置语音模型复制到应用存储", fontSize = 13.sp)
+                            Text(
+                                "已复制 ${SherpaModelManager.copiedBytes.longValue / 1024 / 1024} MB，完成后即可离线听写",
+                                modifier = Modifier.padding(top = 4.dp),
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                        }
+                    }
+                }
+            }
+            item {
+                val preparingModel = useSherpa && SherpaModelManager.isPreparing.value
                 Button(
                     onClick = {
                         Log.d("Dictation", "button clicked: useVosk=$useVosk useSherpa=$useSherpa hasPerm=$hasPermission")
@@ -311,6 +332,7 @@ fun DictationScreen(onBack: () -> Unit = {}) {
                             }
                         }
                     },
+                    enabled = !preparingModel,
                     modifier = Modifier.fillMaxWidth().height(48.dp),
                         colors = if ((useVosk || useSherpa) && (voskRecognizer.isListening || sherpaRecognizer.isListening))
                         ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))
@@ -319,6 +341,7 @@ fun DictationScreen(onBack: () -> Unit = {}) {
                 ) {
                     Text(
                         when {
+                            preparingModel -> "正在准备内置模型…"
                             !hasPermission -> "授予麦克风权限"
                             (useVosk && voskRecognizer.isListening) || (useSherpa && sherpaRecognizer.isListening) -> "停止听"
                             else -> "语音输入"

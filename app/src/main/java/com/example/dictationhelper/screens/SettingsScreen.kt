@@ -315,7 +315,12 @@ fun SettingsScreen() {
 
                     SettingsSwitchRow(
                         label = "离线语音识别 (sherpa-onnx)",
-                        description = if (sherpaReady) "已安装流式模型，适合中英文听写" else "需导入 sherpa-onnx 流式模型（模型较大）",
+                        description = when {
+                            SherpaModelManager.isPreparing.value ->
+                                "首次启用：正在复制内置模型 ${SherpaModelManager.copiedBytes.longValue / 1024 / 1024} MB，请稍候"
+                            sherpaReady -> "已安装流式模型，适合中英文听写"
+                            else -> "需导入 sherpa-onnx 流式模型（模型较大）"
+                        },
                         checked = ThemeSettings.useSherpaOffline,
                         onCheckedChange = {
                             if (it && !sherpaReady) showSherpaModelDialog = true
@@ -330,7 +335,12 @@ fun SettingsScreen() {
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     SettingsClickRow(
                         label = "sherpa-onnx 模型",
-                        summary = if (sherpaReady) "已安装 ✓" else "未安装",
+                        summary = when {
+                            SherpaModelManager.isPreparing.value ->
+                                "正在准备内置模型 ${SherpaModelManager.copiedBytes.longValue / 1024 / 1024} MB"
+                            sherpaReady -> "已安装 ✓"
+                            else -> "未安装"
+                        },
                         summaryColor = if (sherpaReady) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         onClick = { showSherpaModelDialog = true }
                     )
