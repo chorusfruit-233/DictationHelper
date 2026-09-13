@@ -47,9 +47,9 @@ class SherpaRecognizer {
     private var recorder: AudioRecord? = null
     private var stopSignal: AtomicBoolean? = null
 
-    fun init(context: Context): Boolean {
+    suspend fun init(context: Context): Boolean {
         destroy()
-        if (!SherpaModelManager.isReady(context)) {
+        if (!SherpaModelManager.ensureReady(context)) {
             error = "未安装 sherpa-onnx 模型"
             return false
         }

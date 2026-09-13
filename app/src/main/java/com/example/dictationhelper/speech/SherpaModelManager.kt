@@ -18,6 +18,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 import java.io.BufferedInputStream
@@ -36,6 +39,7 @@ object SherpaModelManager {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val mainHandler = Handler(Looper.getMainLooper())
     private var importJob: Job? = null
+    private val assetsCopyMutex = Mutex()
 
     fun cancelImport() {
         importJob?.cancel()
@@ -44,13 +48,33 @@ object SherpaModelManager {
     fun modelDirectory(context: Context): File = File(context.filesDir, MODEL_DIR)
 
     fun isReady(context: Context): Boolean {
-        val target = modelDirectory(context)
-        if (isReady(target)) return true
-        return try {
-            if (context.assets.list(MODEL_DIR)?.isNotEmpty() == true) {
-                copyAssets(context, MODEL_DIR, target)
+        return isReady(modelDirectory(context))
+    }
+
+    /**
+     * Checks the installed model and, for bundled APKs, copies the asset model on IO.
+     * Keeping this separate from [isReady] makes UI recomposition a cheap operation.
+     */
+    suspend fun ensureReady(context: Context): Boolean = withContext(Dispatchers.IO) {
+        try {
+            assetsCopyMutex.withLock {
+                val target = modelDirectory(context)
+                if (isReady(target)) return@withLock true
+                if (context.assets.list(MODEL_DIR).isNullOrEmpty()) return@withLock false
+
+                val staging = File(context.cacheDir, "$MODEL_DIR-assets-staging")
+                if (staging.exists()) staging.deleteRecursively()
+                copyAssets(context, MODEL_DIR, staging)
+                if (!isReady(staging)) throw IllegalStateException("内置 sherpa 模型不完整")
+                if (target.exists()) target.deleteRecursively()
+                if (!staging.renameTo(target)) {
+                    staging.copyRecursively(target, overwrite = true)
+                    staging.deleteRecursively()
+                }
                 isReady(target)
-            } else false
+            }
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             false
         }
@@ -133,7 +157,14 @@ object SherpaModelManager {
                             ensureActive()
                             output.write(buffer, 0, count)
                             read += count
-                            if (total > 0) mainHandler.post { progress.floatValue = (read.toFloat() / total).coerceIn(0f, 1f) * 0.8f }
+                            if (total > 0) {
+                                val now = android.os.SystemClock.uptimeMillis()
+                                val value = (read.toFloat() / total).coerceIn(0f, 1f) * 0.8f
+                                if (now - lastProgressPost >= 250L || value >= 0.8f) {
+                                    lastProgressPost = now
+                                    mainHandler.post { progress.floatValue = value }
+                                }
+                            }
                         }
                     }
                 }
@@ -158,6 +189,8 @@ object SherpaModelManager {
             }
         }
     }
+
+    private var lastProgressPost = 0L
 
     private suspend fun installArchive(context: Context, archive: File) {
         val target = modelDirectory(context)

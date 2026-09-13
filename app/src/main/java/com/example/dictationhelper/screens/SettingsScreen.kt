@@ -281,7 +281,15 @@ fun SettingsScreen() {
                     var showEnModelDialog by remember { mutableStateOf(false) }
                     var showSherpaModelDialog by remember { mutableStateOf(false) }
                     val anyReady = cnReady || enReady
-                    val sherpaReady = SherpaModelManager.isReady(context)
+                    var sherpaReady by remember { mutableStateOf(SherpaModelManager.isReady(context)) }
+                    LaunchedEffect(Unit) {
+                        sherpaReady = SherpaModelManager.ensureReady(context)
+                    }
+                    LaunchedEffect(SherpaModelManager.isImporting.value) {
+                        if (!SherpaModelManager.isImporting.value) {
+                            sherpaReady = SherpaModelManager.isReady(context)
+                        }
+                    }
 
                     SettingsSwitchRow(
                         label = "离线语音识别 (Vosk)",
