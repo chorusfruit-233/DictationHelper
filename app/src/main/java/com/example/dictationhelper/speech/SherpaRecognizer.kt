@@ -20,6 +20,7 @@ import com.k2fsa.sherpa.onnx.OnlineRecognizerConfig
 import com.k2fsa.sherpa.onnx.OnlineTransducerModelConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
@@ -148,12 +149,15 @@ class SherpaRecognizer {
                 try { activeRecorder.stop() } catch (_: Exception) { }
                 activeRecorder.release()
                 if (recorder === activeRecorder) recorder = null
-                withContext(Dispatchers.Main) { isListening = false }
+                withContext(NonCancellable + Dispatchers.Main.immediate) { isListening = false }
             }
         }
     }
 
     fun stopListening() {
+        // Update the button immediately; the recording coroutine may take a moment
+        // to leave the native AudioRecord/decode call and finish cleanup.
+        isListening = false
         stopSignal?.set(true)
         try { recorder?.stop() } catch (_: Exception) { }
         job?.cancel()
