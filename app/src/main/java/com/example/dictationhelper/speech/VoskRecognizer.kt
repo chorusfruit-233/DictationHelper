@@ -18,6 +18,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
@@ -78,6 +80,21 @@ class VoskRecognizer {
             return
         }
 
+        val previousJob = recognitionJob
+        if (previousJob?.isActive == true) {
+            requestStop()
+            val stopped = runBlocking {
+                withTimeoutOrNull(500) {
+                    previousJob.join()
+                    true
+                } ?: false
+            }
+            if (!stopped) {
+                error = "上一次识别尚未停止，请稍后再试"
+                return
+            }
+        }
+
         shouldStop = false
         partialText = ""
         error = null
@@ -109,20 +126,22 @@ class VoskRecognizer {
         }
 
         recognitionJob?.cancel()
+        val activeRecognizer = recognizer ?: return
+        val activeAudioRecord = audioRecord ?: return
         recognitionJob = scope.launch {
             var resultText = ""
             var latestPartialText = ""
             try {
                 withContext(Dispatchers.IO) {
-                audioRecord?.startRecording()
+                activeAudioRecord.startRecording()
                 Log.d(TAG, "recording started")
                 val buffer = ShortArray(bufferSize)
                 while (!shouldStop) {
-                    val count = audioRecord?.read(buffer, 0, buffer.size) ?: break
+                    val count = activeAudioRecord.read(buffer, 0, buffer.size)
                     if (count <= 0) break
-                    val accepted = recognizer?.acceptWaveForm(buffer, count) ?: false
+                    val accepted = activeRecognizer.acceptWaveForm(buffer, count)
                     if (accepted) {
-                        val r = recognizer?.result ?: "{}"
+                        val r = activeRecognizer.result
                         val text = JSONObject(r).optString("text", "")
                         Log.d(TAG, "ACCEPT: text='$text'")
                         if (text.isNotBlank()) {
@@ -134,7 +153,7 @@ class VoskRecognizer {
                             }
                         }
                     } else {
-                        val p = recognizer?.partialResult ?: "{}"
+                        val p = activeRecognizer.partialResult
                         val text = JSONObject(p).optString("partial", "")
                         if (text.isNotBlank()) {
                             latestPartialText = text
@@ -144,7 +163,7 @@ class VoskRecognizer {
                 }
                 Log.d(TAG, "loop ended, result='$resultText' partial='$latestPartialText'")
                 if (resultText.isEmpty() && latestPartialText.isNotEmpty()) {
-                    val fr = recognizer?.finalResult ?: "{}"
+                    val fr = activeRecognizer.finalResult
                     resultText = JSONObject(fr).optString("text", "").ifBlank { latestPartialText }
                     Log.d(TAG, "final flush: resultText='$resultText'")
                 }
@@ -155,9 +174,9 @@ class VoskRecognizer {
                 Log.e(TAG, "recognition error", e)
                 error = "识别错误: ${e.message}"
             } finally {
-                try { audioRecord?.stop() } catch (_: Exception) {}
-                try { audioRecord?.release() } catch (_: Exception) {}
-                audioRecord = null
+                try { activeAudioRecord.stop() } catch (_: Exception) {}
+                try { activeAudioRecord.release() } catch (_: Exception) {}
+                if (audioRecord === activeAudioRecord) audioRecord = null
                 isListening = false
             }
             Log.d(TAG, "thread done, resultText='$resultText', posting to main")
@@ -177,18 +196,49 @@ class VoskRecognizer {
 
     fun stopListening() {
         Log.d(TAG, "stopListening")
+        requestStop()
+    }
+
+    private fun requestStop() {
         shouldStop = true
         try { audioRecord?.stop() } catch (_: Exception) { }
         recognitionJob?.cancel()
-        recognitionJob = null
     }
 
     fun destroy() {
-        stopListening()
-        recognizer?.close()
+        val job = recognitionJob
+        val recognizerToClose = recognizer
+        requestStop()
+
+        val completed = if (job == null) {
+            true
+        } else {
+            runBlocking {
+                withTimeoutOrNull(500) {
+                    job.join()
+                    true
+                } ?: false
+            }
+        }
+
+        if (completed) {
+            closeRecognizer(recognizerToClose)
+        } else {
+            Log.w(TAG, "recognition did not stop within timeout; deferring recognizer close")
+            job?.invokeOnCompletion { closeRecognizer(recognizerToClose) }
+        }
+        recognitionJob = null
         recognizer = null
         audioRecord?.release()
         audioRecord = null
         currentLang = ""
+    }
+
+    private fun closeRecognizer(value: org.vosk.Recognizer?) {
+        try {
+            value?.close()
+        } catch (e: Throwable) {
+            Log.w(TAG, "recognizer close failed", e)
+        }
     }
 }
