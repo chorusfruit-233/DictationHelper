@@ -40,6 +40,7 @@ class VoskRecognizer {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var recognitionJob: Job? = null
     @Volatile private var shouldStop = false
+    @Volatile private var deliverFinalResult = false
     private var currentLang = ""
 
     fun init(context: Context, lang: String): Boolean {
@@ -82,7 +83,7 @@ class VoskRecognizer {
 
         val previousJob = recognitionJob
         if (previousJob?.isActive == true) {
-            requestStop()
+            requestStop(cancelJob = true)
             val stopped = runBlocking {
                 withTimeoutOrNull(500) {
                     previousJob.join()
@@ -96,6 +97,7 @@ class VoskRecognizer {
         }
 
         shouldStop = false
+        deliverFinalResult = false
         partialText = ""
         error = null
         isListening = true
@@ -180,7 +182,7 @@ class VoskRecognizer {
                 isListening = false
             }
             Log.d(TAG, "thread done, resultText='$resultText', posting to main")
-            if (resultText.isNotBlank() && !shouldStop) {
+            if (resultText.isNotBlank() && (deliverFinalResult || !shouldStop)) {
                 withContext(Dispatchers.Main) {
                     Log.d(TAG, "MAIN: invoking onResult with '$resultText'")
                     onResult?.invoke(resultText)
@@ -196,19 +198,21 @@ class VoskRecognizer {
 
     fun stopListening() {
         Log.d(TAG, "stopListening")
-        requestStop()
+        deliverFinalResult = true
+        requestStop(cancelJob = false)
     }
 
-    private fun requestStop() {
+    private fun requestStop(cancelJob: Boolean) {
         shouldStop = true
         try { audioRecord?.stop() } catch (_: Exception) { }
-        recognitionJob?.cancel()
+        if (cancelJob) recognitionJob?.cancel()
     }
 
     fun destroy() {
         val job = recognitionJob
         val recognizerToClose = recognizer
-        requestStop()
+        deliverFinalResult = false
+        requestStop(cancelJob = true)
 
         val completed = if (job == null) {
             true
