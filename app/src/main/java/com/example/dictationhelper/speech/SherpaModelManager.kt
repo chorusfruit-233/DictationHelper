@@ -16,6 +16,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.ensureActive
@@ -66,7 +67,9 @@ object SherpaModelManager {
         preparedBytes = 0
         lastPreparePost = 0
         return try {
-            withContext(Dispatchers.IO) { prepareFromAssets(context) }
+            // NonCancellable: leaving the screen that triggered the copy must not abort it
+            // halfway, otherwise the model never finishes installing.
+            withContext(Dispatchers.IO + NonCancellable) { prepareFromAssets(context) }
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
