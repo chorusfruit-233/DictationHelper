@@ -39,13 +39,13 @@ plugins {
 // Give each built APK a fresh accent color while keeping the icon itself a
 // simple, recognizable letter D. The generated resource is never checked in.
 val iconColorDir = layout.buildDirectory.dir("generated/iconColor/res")
-val generateIconColor by tasks.registering(GenerateIconColorTask::class) {
+val generateIconColor = tasks.register<GenerateIconColorTask>("generateIconColor") {
     outputDirectory.set(iconColorDir)
     outputs.upToDateWhen { false }
 }
 
 android {
-    sourceSets["main"].res.srcDir(iconColorDir.get().asFile)
+    sourceSets["main"].res.directories.add(iconColorDir.get().asFile.absolutePath)
     namespace = "com.example.dictationhelper"
     compileSdk {
         version = release(36) {
