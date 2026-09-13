@@ -24,6 +24,14 @@ This project uses third-party libraries, models, and resources. Their licenses a
 - License: Apache License 2.0
 - Source: https://alphacephei.com/vosk/
 
+## sherpa-onnx Android runtime
+
+- Library: `sherpa-onnx` Android native runtime and Kotlin API
+- License: Apache License 2.0
+- Source: https://github.com/k2-fsa/sherpa-onnx
+
+The bundled native runtime includes ONNX Runtime components, licensed under the MIT License.
+
 ## Vosk Speech Models
 
 Before distributing APK files that include offline speech models, verify and document the license of each model package.
