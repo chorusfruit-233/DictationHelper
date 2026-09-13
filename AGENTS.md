@@ -11,7 +11,7 @@
 ## Environment
 
 - MinSdk **29** (raised for `android.icu.text.Transliterator`)
-- TargetSdk 36, AGP 9.2.1, Gradle 9.4.1, Kotlin 2.2.10
+- TargetSdk 36, AGP 9.4.0, Gradle 9.6.0, Kotlin 2.2.10
 - `buildConfig = true` must be enabled in `buildFeatures` (`BuildConfig.BUILD_TIME` used)
 - `org.gradle.configuration-cache=true` in `gradle.properties`
 

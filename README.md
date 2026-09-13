@@ -54,7 +54,7 @@
 |---|---|
 | 语言 | Kotlin |
 | UI | Jetpack Compose + Material Design 3 |
-| 构建 | Gradle 9.4.1 + AGP 9.2.1 |
+| 构建 | Gradle 9.6.0 + AGP 9.4.0 |
 | 离线语音 | Vosk Android SDK + sherpa-onnx + whisper.cpp |
 | 网络 | OkHttp 4 |
 | AI 通信 | OpenAI 兼容 Chat Completions API |
