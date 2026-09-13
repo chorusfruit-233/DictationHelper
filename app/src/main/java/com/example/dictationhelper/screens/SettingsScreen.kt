@@ -292,14 +292,12 @@ fun SettingsScreen() {
                             sherpaReady = SherpaModelManager.isReady(context)
                         }
                     }
-                    var whisperReady by remember { mutableStateOf(WhisperModelManager.isReady(context)) }
-                    LaunchedEffect(Unit) {
-                        whisperReady = WhisperModelManager.ensureReady(context)
-                    }
-                    LaunchedEffect(WhisperModelManager.isDownloading.value) {
-                        if (!WhisperModelManager.isDownloading.value) {
-                            whisperReady = WhisperModelManager.isReady(context)
-                        }
+                    // Reading modelRevision makes the installed state refresh after a download/import.
+                    val whisperRevision = WhisperModelManager.modelRevision.value
+                    val selectedWhisper = WhisperModelManager.selectedModel(context)
+                    val whisperReady = WhisperModelManager.isReady(context, selectedWhisper.id)
+                    LaunchedEffect(selectedWhisper.id, whisperRevision) {
+                        WhisperModelManager.ensureReady(context)
                     }
 
                     SettingsSwitchRow(
@@ -352,9 +350,9 @@ fun SettingsScreen() {
                     SettingsSwitchRow(
                         label = "离线语音识别 (whisper.cpp)",
                         description = if (whisperReady) {
-                            "已安装多语言模型，停止录音后进行高准确率识别"
+                            "已安装 ${selectedWhisper.displayName}，停止录音后进行高准确率识别"
                         } else {
-                            "需下载或导入 whisper.cpp 多语言模型（约 75MB）"
+                            "需下载或导入 ${selectedWhisper.displayName}（${selectedWhisper.sizeLabel}）"
                         },
                         checked = ThemeSettings.useWhisperOffline,
                         onCheckedChange = {
@@ -387,7 +385,7 @@ fun SettingsScreen() {
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     SettingsClickRow(
                         label = "whisper.cpp 模型",
-                        summary = if (whisperReady) "已安装 ✓（tiny，多语言）" else "未安装",
+                        summary = if (whisperReady) "已安装 ✓（${selectedWhisper.displayName}）" else "未安装（${selectedWhisper.displayName}）",
                         summaryColor = if (whisperReady) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         onClick = { showWhisperModelDialog = true }
                     )
@@ -916,8 +914,13 @@ fun SherpaModelImportDialog(onDismiss: () -> Unit) {
 fun WhisperModelImportDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
     var status by remember { mutableStateOf("idle") }
+    var selectedId by remember { mutableStateOf(WhisperModelManager.selectedModelId(context)) }
+    // Observe revision so the installed markers refresh after a transfer.
+    val revision = WhisperModelManager.modelRevision.value
+    val selected = WhisperModelManager.modelSpec(selectedId)
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
+        WhisperModelManager.selectModel(context, selectedId)
         status = "importing"
         WhisperModelManager.importFromUri(context, uri) { success -> status = if (success) "done" else "error" }
     }
@@ -929,13 +932,51 @@ fun WhisperModelImportDialog(onDismiss: () -> Unit) {
                 status = "idle"
             } else onDismiss()
         },
-        title = { Text("安装 whisper.cpp 模型") },
+        title = { Text("whisper.cpp 模型") },
         text = {
             Column {
                 when (status) {
-                    "idle" -> Text(
-                        "whisper.cpp 使用多语言 tiny 模型（约 75MB）。它会在停止录音后进行整段识别，准确率更高但处理时间较长。"
-                    )
+                    "idle", "error" -> {
+                        Text(
+                            "选择模型后可直接下载或导入。模型越大识别越准确，但占用空间和处理时间也会增加。",
+                            fontSize = 13.sp
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        WhisperModelManager.modelOptions().forEach { spec ->
+                            val installed = WhisperModelManager.isReady(context, spec.id)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        selectedId = spec.id
+                                        WhisperModelManager.selectModel(context, spec.id)
+                                    }
+                                    .padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = if (selectedId == spec.id) "●" else "○",
+                                    color = if (selectedId == spec.id) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(end = 10.dp)
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(spec.displayName, fontWeight = if (selectedId == spec.id) FontWeight.Bold else FontWeight.Normal)
+                                    Text(
+                                        "${spec.sizeLabel}${if (installed) " · 已安装" else ""}",
+                                        fontSize = 12.sp,
+                                        color = if (installed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                        if (status == "error") {
+                            Text(
+                                "安装失败：${WhisperModelManager.error.value ?: "模型格式无效"}",
+                                color = MaterialTheme.colorScheme.error,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
                     "importing" -> {
                         LinearProgressIndicator(
                             progress = { WhisperModelManager.progress.floatValue },
@@ -946,24 +987,21 @@ fun WhisperModelImportDialog(onDismiss: () -> Unit) {
                             modifier = Modifier.padding(top = 8.dp)
                         )
                     }
-                    "done" -> Text("模型安装成功，现在可以启用 whisper.cpp。", color = MaterialTheme.colorScheme.primary)
-                    else -> Text(
-                        "安装失败：${WhisperModelManager.error.value ?: "模型格式无效"}",
-                        color = MaterialTheme.colorScheme.error
-                    )
+                    "done" -> Text("${selected.displayName} 安装成功，现在可以启用 whisper.cpp。", color = MaterialTheme.colorScheme.primary)
                 }
             }
         },
         confirmButton = {
             when (status) {
                 "idle", "error" -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { picker.launch("application/octet-stream") }) { Text("选择模型") }
+                    OutlinedButton(onClick = { picker.launch("application/octet-stream") }) { Text("选择文件") }
                     Button(onClick = {
+                        WhisperModelManager.selectModel(context, selectedId)
                         status = "importing"
-                        WhisperModelManager.downloadOfficialModel(context) { success ->
+                        WhisperModelManager.downloadOfficialModel(context, selectedId) { success ->
                             status = if (success) "done" else "error"
                         }
-                    }) { Text("下载官方模型") }
+                    }) { Text("下载 ${selected.displayName}") }
                 }
                 "done" -> Button(onClick = onDismiss) { Text("完成") }
                 else -> OutlinedButton(onClick = {

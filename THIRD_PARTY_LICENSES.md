@@ -47,8 +47,10 @@ and is not included in the standard APK. Verify the model license before redistr
 - License: MIT License
 - Source: https://github.com/ggerganov/whisper.cpp
 
-The optional `ggml-tiny.bin` model is downloaded from the official whisper.cpp
-Hugging Face repository. Verify the model license before redistribution.
+The bundled `ggml-base-q5_1.bin` model (and any model downloaded in-app) comes
+from the official whisper.cpp Hugging Face repository. Quantized models such as
+`base-q5_1` are distributed under the same model terms; verify the model license
+before redistribution.
 
 ## Vosk Speech Models
 

@@ -147,8 +147,9 @@ storeFile=../app/your-keystore.jks
 
 ### whisper.cpp 多语言模型
 
-whisper.cpp 使用官方多语言 `ggml-tiny.bin` 模型（约 75MB）。在设置 → 语音设置 →
-whisper.cpp 模型中下载或导入模型。该引擎会缓存整段录音，点击“停止听”后进行识别，
+whisper.cpp 默认使用官方多语言 `ggml-base-q5_1.bin` 模型（约 60MB）。首次启动会从
+APK 内置资源复制模型；在设置 → 语音设置 → whisper.cpp 模型中也可以下载或导入其他
+官方模型（如 tiny、small、base）。该引擎会缓存整段录音，点击“停止听”后进行识别，
 适合轻声和中英文混合场景，但处理时间和内存占用高于 Vosk/sherpa-onnx。
 
 ## AI 配置
@@ -170,13 +171,13 @@ GitHub Actions 手动触发：Actions → **Build & Release** → **Run workflow
 - `Create Release` — 发布 GitHub Release（Tag 使用 `versionName`）
 - `Also build with Vosk models` — 额外构建预装中英文离线模型的 APK
 - `Also build with sherpa-onnx model` — 额外构建预装官方中英流式模型的 APK（模型约 500MB）
-- `Also build with whisper.cpp model` — 额外构建预装多语言 tiny 模型的 APK（模型约 75MB）
+- `Also build with whisper.cpp model` — 额外构建预装多语言 base-q5_1 模型的 APK（模型约 60MB）
 
 **构建产物**（Release APK，R8 优化 + 签名 + 去日志）：
 - `DictationHelper-v{version}.apk` — 标准版
 - `DictationHelper-v{version}-with-vosk-models.apk` — 预装中/英文 Vosk 离线语音模型
 - `DictationHelper-v{version}-with-sherpa-model.apk` — 预装 sherpa-onnx 中英流式模型
-- `DictationHelper-v{version}-with-whisper-model.apk` — 预装 whisper.cpp 多语言 tiny 模型
+- `DictationHelper-v{version}-with-whisper-base-model.apk` — 预装 whisper.cpp 多语言 base-q5_1 模型
 
 **缓存**：Gradle 依赖 + 配置缓存 + Vosk 模型 zip 均自动缓存，重复构建显著加速。
 
