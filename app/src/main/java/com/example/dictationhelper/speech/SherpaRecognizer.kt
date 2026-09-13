@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 chorusfruit-233
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 package com.example.dictationhelper.speech
 
 import android.content.Context
@@ -17,10 +22,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 
 private const val TAG = "Sherpa"
 
@@ -38,7 +45,7 @@ class SherpaRecognizer {
     private var recognizer: OnlineRecognizer? = null
     private var stream: com.k2fsa.sherpa.onnx.OnlineStream? = null
     private var recorder: AudioRecord? = null
-    private var stopRequested = false
+    private var stopSignal: AtomicBoolean? = null
 
     fun init(context: Context): Boolean {
         destroy()
@@ -81,8 +88,22 @@ class SherpaRecognizer {
             error = "sherpa 识别器未初始化"
             return
         }
-        stopListening()
-        stopRequested = false
+        val previousJob = job
+        if (previousJob?.isActive == true) {
+            stopListening()
+            val stopped = runBlocking {
+                withTimeoutOrNull(500) {
+                    previousJob.join()
+                    true
+                } ?: false
+            }
+            if (!stopped) {
+                error = "上一次识别尚未停止，请稍后再试"
+                return
+            }
+        }
+        val activeStopSignal = AtomicBoolean(false)
+        stopSignal = activeStopSignal
         partialText = ""
         error = null
         isListening = true
@@ -105,7 +126,7 @@ class SherpaRecognizer {
                 withContext(Dispatchers.IO) {
                     activeRecorder.startRecording()
                     val buffer = ShortArray(bufferSize)
-                    while (!stopRequested) {
+                    while (!activeStopSignal.get()) {
                         val count = activeRecorder.read(buffer, 0, buffer.size)
                         if (count <= 0) break
                         val samples = FloatArray(count) { buffer[it] / 32768.0f }
@@ -122,7 +143,7 @@ class SherpaRecognizer {
                     }
                 }
             } catch (e: Throwable) {
-                if (!stopRequested) withContext(Dispatchers.Main) { error = "sherpa 识别错误: ${e.message}" }
+                if (!activeStopSignal.get()) withContext(Dispatchers.Main) { error = "sherpa 识别错误: ${e.message}" }
             } finally {
                 try { activeRecorder.stop() } catch (_: Exception) { }
                 activeRecorder.release()
@@ -133,20 +154,44 @@ class SherpaRecognizer {
     }
 
     fun stopListening() {
-        stopRequested = true
+        stopSignal?.set(true)
         try { recorder?.stop() } catch (_: Exception) { }
         job?.cancel()
     }
 
     fun destroy() {
+        val jobToStop = job
+        val streamToRelease = stream
+        val recognizerToRelease = recognizer
         stopListening()
+        val completed = if (jobToStop == null) true else runBlocking {
+            withTimeoutOrNull(500) {
+                jobToStop.join()
+                true
+            } ?: false
+        }
+        if (completed) {
+            releaseResources(streamToRelease, recognizerToRelease)
+        } else {
+            Log.w(TAG, "recognition did not stop within timeout; deferring sherpa release")
+            jobToStop?.invokeOnCompletion { releaseResources(streamToRelease, recognizerToRelease) }
+        }
         job = null
-        stream?.release()
+        stopSignal = null
         stream = null
-        recognizer?.release()
         recognizer = null
-        recorder?.release()
+        if (jobToStop == null) {
+            try { recorder?.release() } catch (_: Exception) { }
+        }
         recorder = null
+    }
+
+    private fun releaseResources(
+        stream: com.k2fsa.sherpa.onnx.OnlineStream?,
+        recognizer: OnlineRecognizer?
+    ) {
+        try { stream?.release() } catch (e: Throwable) { Log.w(TAG, "stream release failed", e) }
+        try { recognizer?.release() } catch (e: Throwable) { Log.w(TAG, "recognizer release failed", e) }
     }
 
     private fun requireFile(root: File, kind: String): String =
