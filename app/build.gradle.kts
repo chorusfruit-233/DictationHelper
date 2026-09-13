@@ -22,6 +22,7 @@ android {
             minorApiLevel = 1
         }
     }
+    ndkVersion = "28.2.13676358"
 
     defaultConfig {
         applicationId = "com.example.dictationhelper"
@@ -34,6 +35,13 @@ android {
 
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
+        }
+
+        externalNativeBuild {
+            cmake {
+                cppFlags += "-std=c++17"
+                arguments += listOf("-DANDROID_STL=c++_static")
+            }
         }
 
         buildConfigField("String", "BUILD_TIME", "\"${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.CHINA).apply { timeZone = TimeZone.getTimeZone("Asia/Shanghai") }.format(Date())}\"")
@@ -82,6 +90,12 @@ android {
     packaging {
         jniLibs {
             excludes += emptySet<String>()
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/whisper/CMakeLists.txt")
         }
     }
 }

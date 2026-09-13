@@ -42,5 +42,8 @@
 # Keep sherpa-onnx Kotlin JNI wrappers and native method names.
 -keep class com.k2fsa.sherpa.onnx.** { *; }
 
+# Keep the whisper.cpp JNI bridge and native method names.
+-keep class com.example.dictationhelper.speech.WhisperNative { *; }
+
 # Keep the EditableWordItem data class for Json parsing
 -keep class com.example.dictationhelper.screens.EditableWordItem { *; }
