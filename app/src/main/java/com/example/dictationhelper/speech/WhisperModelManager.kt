@@ -265,21 +265,6 @@ object WhisperModelManager {
         } finally { if (temp.exists()) temp.delete() }
     }
 
-    private fun hasWhisperMagic(file: File): Boolean {
-        if (!file.isFile || file.length() <= 1_000_000L) return false
-        return try {
-            file.inputStream().use { input ->
-                val magic = ByteArray(4)
-                var offset = 0
-                while (offset < magic.size) {
-                    val count = input.read(magic, offset, magic.size - offset)
-                    if (count < 0) break
-                    offset += count
-                }
-                offset == magic.size &&
-                    (magic.contentEquals(byteArrayOf('g'.code.toByte(), 'g'.code.toByte(), 'm'.code.toByte(), 'l'.code.toByte())) ||
-                        magic.contentEquals(byteArrayOf('G'.code.toByte(), 'G'.code.toByte(), 'U'.code.toByte(), 'F'.code.toByte())))
-            }
-        } catch (_: Exception) { false }
-    }
+    private fun hasWhisperMagic(file: File): Boolean =
+        file.length() > 1_000_000L && WhisperModelFiles.hasWhisperMagic(file)
 }
