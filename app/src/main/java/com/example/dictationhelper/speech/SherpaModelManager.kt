@@ -216,6 +216,7 @@ object SherpaModelManager {
                 }
             }
         }
+        SherpaModelFiles.pruneUnusedWeights(staging)
         if (!isReady(staging)) throw IllegalArgumentException("未找到 tokens、encoder、decoder、joiner 模型文件")
         if (target.exists()) target.deleteRecursively()
         if (!staging.renameTo(target)) {
@@ -237,16 +238,8 @@ object SherpaModelManager {
         }
     }
 
-    internal fun findModelFile(root: File, kind: String): File? {
-        if (!root.exists()) return null
-        return root.walkTopDown().firstOrNull { file ->
-            file.isFile && when (kind) {
-                "tokens" -> file.name == "tokens.txt"
-                "encoder" -> file.name.startsWith("encoder") && file.extension == "onnx"
-                "decoder" -> file.name.startsWith("decoder") && file.extension == "onnx"
-                "joiner" -> file.name.startsWith("joiner") && file.extension == "onnx"
-                else -> false
-            }
-        }
-    }
+    /**
+     * Picks the file for [kind] deterministically; see [SherpaModelFiles.find].
+     */
+    internal fun findModelFile(root: File, kind: String): File? = SherpaModelFiles.find(root, kind)
 }
