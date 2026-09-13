@@ -58,7 +58,7 @@ object WordRepository {
     }
 
     fun createList(name: String): String {
-        val id = System.currentTimeMillis().toString()
+        val id = newListId()
         lists.add(WordList(id = id, name = name))
         switchToList(id)
         return id
@@ -105,6 +105,37 @@ object WordRepository {
         words.addAll(uniqueWords)
         saveCurrentListState()
         scheduleSave()
+    }
+
+    /**
+     * Adds [newWords] to the list called [name], creating it when it does not exist yet, and
+     * returns the list id. Used to spread an import across one list per textbook unit without
+     * changing which list the caller is working in.
+     */
+    fun addWordsToNamedList(name: String, newWords: List<WordItem>): String {
+        val existing = lists.find { it.name == name }
+        val target = existing ?: WordList(id = newListId(), name = name).also { lists.add(it) }
+        val index = lists.indexOfFirst { it.id == target.id }
+        val existingKeys = lists[index].words.asSequence()
+            .map { it.text.trim().lowercase() }
+            .filter { it.isNotEmpty() }
+            .toMutableSet()
+        val uniqueWords = newWords.filter { word ->
+            val key = word.text.trim().lowercase()
+            key.isNotEmpty() && existingKeys.add(key)
+        }
+        lists[index] = lists[index].copy(words = lists[index].words + uniqueWords)
+        if (currentListId == target.id) syncWordsFromCurrent()
+        scheduleSave()
+        return target.id
+    }
+
+    private fun newListId(): String {
+        var candidate = System.currentTimeMillis().toString()
+        while (lists.any { it.id == candidate }) {
+            candidate = (candidate.toLong() + 1).toString()
+        }
+        return candidate
     }
 
     private fun saveCurrentListState() {

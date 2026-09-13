@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -34,6 +34,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -67,7 +68,9 @@ data class EditableWordItem(
     val partOfSpeech: String = "",
     val aliases: String = "",
     val type: String,
-    val include: Boolean = true
+    val include: Boolean = true,
+    /** Textbook unit this word belongs to; empty means it goes to the current list. */
+    val unit: String = ""
 )
 
 internal val DEFAULT_VISION_PROMPT = """
@@ -81,9 +84,9 @@ internal val DEFAULT_VISION_PROMPT = """
 
 {
   "bookName": "书名",
-  "unitName": "单元名",
+  "unitName": "单元名（整页同属一个单元时填写）",
   "items": [
-    {"text": "英文单词或短语", "meaningZh": "中文释义", "partOfSpeech": "词性（如 n./v./adj.，没有则留空）", "aliases": ["过去式", "过去分词", "单复数等变体"]}
+    {"text": "英文单词或短语", "unit": "该词所属单元（一页含多个单元时填写，否则留空）", "meaningZh": "中文释义", "partOfSpeech": "词性（如 n./v./adj.，没有则留空）", "aliases": ["过去式", "过去分词", "单复数等变体"]}
   ]
 }
 """.trimIndent()
@@ -98,6 +101,7 @@ fun ImportScreen(onBack: () -> Unit = {}) {
     var inputText by remember { mutableStateOf("") }
     var parsedItems = remember { mutableStateListOf<EditableWordItem>() }
     var showReview by remember { mutableStateOf(false) }
+    var splitByUnit by remember { mutableStateOf(false) }
     var parseMessage by remember { mutableStateOf("") }
     var aiLoading by remember { mutableStateOf(false) }
 
@@ -137,6 +141,7 @@ fun ImportScreen(onBack: () -> Unit = {}) {
                         parseMessage = "未能解析到任何单词，请检查格式"
                     } else {
                         parsedItems.addAll(items)
+                        splitByUnit = items.any { it.unit.isNotBlank() }
                         showReview = true
                     }
                 },
@@ -166,6 +171,7 @@ fun ImportScreen(onBack: () -> Unit = {}) {
                             } else {
                                 parsedItems.clear()
                                 parsedItems.addAll(items)
+                                splitByUnit = items.any { it.unit.isNotBlank() }
                                 showReview = true
                             }
                         }
@@ -178,9 +184,23 @@ fun ImportScreen(onBack: () -> Unit = {}) {
         } else {
             ReviewView(
                 items = parsedItems,
+                splitByUnit = splitByUnit,
+                onSplitByUnitChange = { splitByUnit = it },
                 onSave = {
-                    val toSave = parsedItems.filter { it.include }.map { it.toWordItem() }
-                    WordRepository.addWords(toSave)
+                    val selected = parsedItems.filter { it.include }
+                    val byUnit = selected.filter { it.unit.isNotBlank() }
+                    if (splitByUnit && byUnit.isNotEmpty()) {
+                        val plain = selected.filter { it.unit.isBlank() }.map { it.toWordItem() }
+                        if (plain.isNotEmpty()) WordRepository.addWords(plain)
+                        var firstListId = ""
+                        byUnit.groupBy { it.unit.trim() }.forEach { (unit, items) ->
+                            val listId = WordRepository.addWordsToNamedList(unit, items.map { it.toWordItem() })
+                            if (firstListId.isEmpty()) firstListId = listId
+                        }
+                        if (firstListId.isNotEmpty()) WordRepository.switchToList(firstListId)
+                    } else {
+                        WordRepository.addWords(selected.map { it.toWordItem() })
+                    }
                     WordRepository.save(context)
                     parsedItems.clear()
                     inputText = ""
@@ -312,14 +332,38 @@ private fun InputView(
     }
 }
 
+private sealed interface ReviewRow {
+    data class UnitHeader(val unit: String, val count: Int) : ReviewRow
+    data class Entry(val index: Int) : ReviewRow
+}
+
+private fun buildReviewRows(items: List<EditableWordItem>, groupByUnit: Boolean): List<ReviewRow> {
+    if (!groupByUnit) return items.indices.map { ReviewRow.Entry(it) }
+    val rows = mutableListOf<ReviewRow>()
+    var lastUnit: String? = null
+    items.forEachIndexed { index, item ->
+        val unit = item.unit.trim()
+        if (unit != lastUnit) {
+            rows.add(ReviewRow.UnitHeader(unit.ifEmpty { "未指定单元" }, items.count { it.unit.trim() == unit }))
+            lastUnit = unit
+        }
+        rows.add(ReviewRow.Entry(index))
+    }
+    return rows
+}
+
 @Composable
 private fun ReviewView(
     items: MutableList<EditableWordItem>,
+    splitByUnit: Boolean,
+    onSplitByUnitChange: (Boolean) -> Unit,
     onSave: () -> Unit,
     onBackToInput: () -> Unit,
     modifier: Modifier
 ) {
     val checkedCount = items.count { it.include }
+    val unitCount = items.map { it.unit.trim() }.filter { it.isNotEmpty() }.distinct().size
+    val rows = remember(items.toList(), splitByUnit) { buildReviewRows(items.toList(), splitByUnit) }
 
     Column(modifier = modifier) {
         Row(
@@ -330,12 +374,32 @@ private fun ReviewView(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "解析到 ${items.size} 个词，请校对",
+                text = if (unitCount > 0) "解析到 ${items.size} 个词、$unitCount 个单元" else "解析到 ${items.size} 个词，请校对",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold
             )
             TextButton(onClick = onBackToInput) {
                 Text("重新输入")
+            }
+        }
+
+        if (unitCount > 0) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Switch(checked = splitByUnit, onCheckedChange = onSplitByUnitChange)
+                Spacer(modifier = Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("按单元分配到词表", fontSize = 14.sp)
+                    Text(
+                        text = if (splitByUnit) "每个单元保存为独立词表，同名词表会追加" else "全部保存到当前词表",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
 
@@ -346,16 +410,39 @@ private fun ReviewView(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            itemsIndexed(items, key = { _, item -> item.id }) { index, item ->
-                EditableItemCard(
-                    item = item,
-                    onTextChange = { items[index] = items[index].copy(text = it) },
-                    onMeaningChange = { items[index] = items[index].copy(meaningZh = it) },
-                    onIncludeChange = { items[index] = items[index].copy(include = it) },
-                    onTypeChange = { items[index] = items[index].copy(type = it) },
-                    onPartOfSpeechChange = { items[index] = items[index].copy(partOfSpeech = it) },
-                    onAliasesChange = { items[index] = items[index].copy(aliases = it) }
-                )
+            items(
+                items = rows,
+                key = { row ->
+                    when (row) {
+                        is ReviewRow.UnitHeader -> "unit_${row.unit}"
+                        is ReviewRow.Entry -> items[row.index].id
+                    }
+                }
+            ) { row ->
+                when (row) {
+                    is ReviewRow.UnitHeader -> Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(row.unit, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("${row.count} 词", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+
+                    is ReviewRow.Entry -> {
+                        val index = row.index
+                        EditableItemCard(
+                            item = items[index],
+                            onTextChange = { items[index] = items[index].copy(text = it) },
+                            onMeaningChange = { items[index] = items[index].copy(meaningZh = it) },
+                            onIncludeChange = { items[index] = items[index].copy(include = it) },
+                            onTypeChange = { items[index] = items[index].copy(type = it) },
+                            onPartOfSpeechChange = { items[index] = items[index].copy(partOfSpeech = it) },
+                            onAliasesChange = { items[index] = items[index].copy(aliases = it) },
+                            onUnitChange = { items[index] = items[index].copy(unit = it) }
+                        )
+                    }
+                }
             }
         }
 
@@ -390,7 +477,8 @@ private fun EditableItemCard(
     onIncludeChange: (Boolean) -> Unit,
     onTypeChange: (String) -> Unit,
     onPartOfSpeechChange: (String) -> Unit,
-    onAliasesChange: (String) -> Unit
+    onAliasesChange: (String) -> Unit,
+    onUnitChange: (String) -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -459,6 +547,15 @@ private fun EditableItemCard(
                 singleLine = true,
                 placeholder = { Text("例如：achieved, achieving, achieves") }
             )
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = item.unit,
+                onValueChange = onUnitChange,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("单元（留空则存入当前词表）") },
+                singleLine = true,
+                placeholder = { Text("例如：Unit 1") }
+            )
         }
     }
 }
@@ -496,6 +593,7 @@ private fun tryParseJson(text: String): List<EditableWordItem>? {
     return try {
         val json = JSONObject(text)
         val items = json.getJSONArray("items")
+        val pageUnit = json.optString("unitName", "").trim()
         val result = mutableListOf<EditableWordItem>()
         for (i in 0 until items.length()) {
             val item = items.getJSONObject(i)
@@ -509,7 +607,8 @@ private fun tryParseJson(text: String): List<EditableWordItem>? {
                     aliases = item.optJSONArray("aliases")?.let { arr ->
                         (0 until arr.length()).joinToString(", ") { arr.getString(it) }
                     } ?: "",
-                    type = if (english.contains(" ")) "phrase" else "word"
+                    type = if (english.contains(" ")) "phrase" else "word",
+                    unit = item.optString("unit", "").trim().ifEmpty { pageUnit }
                 )
             )
         }
@@ -519,12 +618,51 @@ private fun tryParseJson(text: String): List<EditableWordItem>? {
     }
 }
 
-private fun parseTextLines(text: String): List<EditableWordItem> {
+/**
+ * Recognises a textbook unit heading such as "Unit 1", "Module 2A" or "第三单元" and returns
+ * the label to group by, or null when the line is an ordinary entry. A heading may carry a
+ * title ("Unit 1 My day"), but a plain vocabulary line such as "unit 单元" is not a heading
+ * because no number follows the keyword.
+ */
+internal fun detectUnitLabel(line: String): String? {
+    val trimmed = line.trim()
+    if (trimmed.isEmpty()) return null
+    val english = ENGLISH_UNIT_HEADER.find(trimmed)
+    if (english != null) {
+        // Normalise the plural keyword so "Units 1-2" and "Unit 1" name their lists consistently.
+        val keyword = english.groupValues[1].lowercase().removeSuffix("s").replaceFirstChar { it.uppercase() }
+        val number = english.groupValues[2].replace(Regex("""\s+"""), "")
+        return "$keyword $number"
+    }
+    val chinese = CHINESE_UNIT_HEADER.find(trimmed)
+    if (chinese != null) {
+        val number = chinese.groupValues[1]
+        val kind = chinese.groupValues[2]
+        return "第$number$kind"
+    }
+    return null
+}
+
+private val ENGLISH_UNIT_HEADER = Regex(
+    """^(units?|modules?|chapters?|parts?)\s*([0-9]{1,3}[A-Za-z]?(?:\s*[-–~,]\s*[0-9]{1,3}[A-Za-z]?)*|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b""",
+    RegexOption.IGNORE_CASE
+)
+
+private val CHINESE_UNIT_HEADER = Regex("""^第\s*([0-9]{1,3}|[一二三四五六七八九十百零两]+)\s*(单元|课|模块|部分)""")
+
+internal fun parseTextLines(text: String): List<EditableWordItem> {
     val result = mutableListOf<EditableWordItem>()
     val timestamp = System.currentTimeMillis()
+    var currentUnit = ""
     text.lines().forEachIndexed { index, line ->
         val trimmed = line.trim()
         if (trimmed.isEmpty()) return@forEachIndexed
+
+        val unitLabel = detectUnitLabel(trimmed)
+        if (unitLabel != null) {
+            currentUnit = unitLabel
+            return@forEachIndexed
+        }
 
         val delimiterMatch = Regex("""\s*[—–\-:：,，=→\t]\s*""").find(trimmed)
         val (english, chinese) = if (delimiterMatch != null) {
@@ -545,7 +683,8 @@ private fun parseTextLines(text: String): List<EditableWordItem> {
                 id = "import_${timestamp}_$index",
                 text = english,
                 meaningZh = chinese,
-                type = type
+                type = type,
+                unit = currentUnit
             )
         )
     }
