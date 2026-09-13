@@ -5,15 +5,9 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Sound waves: the app listens for both speech and dictation. -->
-    <path android:fillColor="#00000000" android:strokeColor="#5EEAD4" android:strokeWidth="3" android:strokeLineCap="round" android:pathData="M22,48 Q16,54 22,60" />
-    <path android:fillColor="#00000000" android:strokeColor="#5EEAD4" android:strokeWidth="3" android:strokeLineCap="round" android:pathData="M86,48 Q92,54 86,60" />
-
-    <!-- Speech bubble, with a small tail that points toward the next word. -->
-    <path android:fillColor="#FFFFFF" android:pathData="M31,28 C31,23 35,20 40,20 L68,20 C73,20 77,23 77,28 L77,61 C77,66 73,69 68,69 L52,69 L43,78 L44,69 L40,69 C35,69 31,66 31,61 Z" />
-
-    <!-- Stylized D / audio glyph inside the bubble. -->
-    <path android:fillColor="#2563EB" android:pathData="M42,32 L51,32 C59,32 64,36 64,45 C64,54 59,58 51,58 L42,58 Z M48,38 L48,52 L51,52 C55,52 58,50 58,45 C58,40 55,38 51,38 Z" />
-    <path android:fillColor="#5EEAD4" android:pathData="M39,37 L42,37 L42,53 L39,53 Z" />
+    <!-- The icon is intentionally only the letter D. Its color is generated per build. -->
+    <path
+        android:fillColor="@color/icon_d_color"
+        android:pathData="M25,16 L50,16 C71,16 84,30 84,54 C84,78 71,92 50,92 L25,92 Z M42,32 L42,76 L50,76 C61,76 67,69 67,54 C67,39 61,32 50,32 Z" />
 
 </vector>

@@ -9,13 +9,43 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import java.security.SecureRandom
+import org.gradle.api.DefaultTask
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.TaskAction
+
+abstract class GenerateIconColorTask : DefaultTask() {
+    @get:OutputDirectory
+    abstract val outputDirectory: DirectoryProperty
+
+    @TaskAction
+    fun generate() {
+        val palette = listOf("#38BDF8", "#A78BFA", "#F472B6", "#34D399", "#FBBF24", "#FB7185", "#22D3EE")
+        val color = palette[SecureRandom().nextInt(palette.size)]
+        val valuesDir = outputDirectory.get().dir("values").asFile
+        valuesDir.mkdirs()
+        valuesDir.resolve("icon_color.xml").writeText(
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?><resources><color name=\"icon_d_color\">$color</color></resources>"
+        )
+    }
+}
 
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
 }
 
+// Give each built APK a fresh accent color while keeping the icon itself a
+// simple, recognizable letter D. The generated resource is never checked in.
+val iconColorDir = layout.buildDirectory.dir("generated/iconColor/res")
+val generateIconColor by tasks.registering(GenerateIconColorTask::class) {
+    outputDirectory.set(iconColorDir)
+    outputs.upToDateWhen { false }
+}
+
 android {
+    sourceSets["main"].res.srcDir(iconColorDir.get().asFile)
     namespace = "com.example.dictationhelper"
     compileSdk {
         version = release(36) {
@@ -99,6 +129,8 @@ android {
         }
     }
 }
+
+tasks.named("preBuild").configure { dependsOn(generateIconColor) }
 
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
