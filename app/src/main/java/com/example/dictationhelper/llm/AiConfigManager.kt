@@ -24,9 +24,9 @@ import javax.crypto.spec.GCMParameterSpec
 data class AiProfile(
     val id: String = System.currentTimeMillis().toString(),
     val name: String = "默认",
-    val apiUrl: String = "https://api.openai.com/v1/chat/completions",
+    val apiUrl: String = "https://api.deepseek.com/v1/chat/completions",
     val apiKey: String = "",
-    val model: String = "gpt-4.1-nano"
+    val model: String = "deepseek-flash"
 ) {
     fun toLlmConfig() = LlmConfig(apiUrl, apiKey, model)
 }

@@ -21,9 +21,9 @@ import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.suspendCancellableCoroutine
 
 data class LlmConfig(
-    val apiUrl: String = "https://api.openai.com/v1/chat/completions",
+    val apiUrl: String = "https://api.deepseek.com/v1/chat/completions",
     val apiKey: String = "",
-    val model: String = "gpt-4.1-nano"
+    val model: String = "deepseek-flash"
 )
 
 data class LlmParseResult(
@@ -253,7 +253,7 @@ object LlmClient {
 
         return withContext(Dispatchers.IO) {
             try {
-                val visionModel = config.model.ifBlank { "gpt-4o" }
+                val visionModel = config.model.ifBlank { "deepseek-flash" }
                 val requestBody = JSONObject().apply {
                     put("model", visionModel)
                     put("messages", org.json.JSONArray().apply {

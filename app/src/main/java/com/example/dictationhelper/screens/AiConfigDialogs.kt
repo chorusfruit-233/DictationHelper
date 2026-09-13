@@ -213,7 +213,7 @@ fun ConfigEditDialog(
                     onValueChange = { model = it },
                     label = { Text("模型") },
                     singleLine = true,
-                    placeholder = { Text("gpt-4o / gpt-4.1-nano / llama-3.3-70b") }
+                    placeholder = { Text("deepseek-flash / llama-3.3-70b / 其他模型") }
                 )
             }
         },
