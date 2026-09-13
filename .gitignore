@@ -10,3 +10,8 @@
 local.properties
 /app/dictation-helper.jks
 /keystore.properties
+
+# Speech models downloaded into assets by the release workflow
+/app/src/main/assets/vosk_model_cn/
+/app/src/main/assets/vosk_model_en/
+/app/src/main/assets/sherpa_model_streaming/

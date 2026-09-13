@@ -123,7 +123,19 @@ jobs:
           tar -xjf /tmp/sherpa-cache/sherpa_model.tar.bz2 -C /tmp/sherpa_model
           MODEL_ROOT=$(find /tmp/sherpa_model -name tokens.txt -printf '%h\n' | head -1)
           test -n "$MODEL_ROOT"
-          cp -a "$MODEL_ROOT"/. app/src/main/assets/sherpa_model_streaming/
+          DEST=app/src/main/assets/sherpa_model_streaming
+          # Ship only tokens plus one precision per network; the archive also carries
+          # the fp32 duplicates and sample audio (~800 MB), which the app never loads.
+          cp "$MODEL_ROOT/tokens.txt" "$DEST/"
+          for kind in encoder decoder joiner; do
+            src=$(find "$MODEL_ROOT" -maxdepth 1 -name "$kind*.int8.onnx" | sort | head -1)
+            if [ -z "$src" ]; then
+              src=$(find "$MODEL_ROOT" -maxdepth 1 -name "$kind*.onnx" | sort | head -1)
+            fi
+            test -n "$src" || { echo "missing $kind model in archive"; exit 1; }
+            cp "$src" "$DEST/"
+          done
+          ls -la "$DEST"
 
       - name: Build APK with Vosk models
         if: ${{ inputs.bundle_vosk }}
