@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package com.k2fsa.sherpa.onnx
 
 class VersionInfo {

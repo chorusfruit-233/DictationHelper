@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Copyright (c)  2024  Xiaomi Corporation
 package com.k2fsa.sherpa.onnx
 

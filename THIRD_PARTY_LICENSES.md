@@ -26,7 +26,7 @@ This project uses third-party libraries, models, and resources. Their licenses a
 
 ## sherpa-onnx Android runtime
 
-- Library: `sherpa-onnx` Android native runtime and Kotlin API
+- Library: `sherpa-onnx` Android native runtime and Kotlin API, version 1.13.8
 - License: Apache License 2.0
 - Source: https://github.com/k2-fsa/sherpa-onnx
 
