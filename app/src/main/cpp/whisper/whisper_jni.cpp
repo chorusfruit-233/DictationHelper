@@ -14,9 +14,12 @@ std::string transcribe(whisper_context *context, int threads, const float *audio
     params.print_timestamps = false;
     params.print_special = false;
     params.translate = false;
-    const bool detect_language = language == nullptr || std::string(language) == "auto";
-    params.language = detect_language ? nullptr : language;
-    params.detect_language = detect_language;
+    // Passing `detect_language = true` makes whisper_full return immediately
+    // after language detection. We need auto detection followed by decoding,
+    // so use the special "auto" language while leaving the flag disabled.
+    const bool auto_language = language == nullptr || std::string(language) == "auto";
+    params.language = auto_language ? "auto" : language;
+    params.detect_language = false;
     params.n_threads = threads;
     params.no_context = true;
     params.single_segment = false;
