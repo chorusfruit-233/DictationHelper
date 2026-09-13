@@ -125,12 +125,26 @@ jobs:
           test -n "$MODEL_ROOT"
           cp -a "$MODEL_ROOT"/. app/src/main/assets/sherpa_model_streaming/
 
-      - name: Build APK with models
-        if: ${{ inputs.bundle_vosk || inputs.bundle_sherpa }}
+      - name: Build APK with Vosk models
+        if: ${{ inputs.bundle_vosk }}
         run: |
+          rm -rf app/src/main/assets/sherpa_model_streaming
           ./gradlew assembleRelease
           mv app/build/outputs/apk/release/*.apk \
-            "DictationHelper-v${{ steps.version.outputs.version }}-with-models.apk"
+            "DictationHelper-v${{ steps.version.outputs.version }}-with-vosk-models.apk"
+        env:
+          KEYSTORE_FILE: dictation-helper.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+      - name: Build APK with sherpa-onnx model
+        if: ${{ inputs.bundle_sherpa }}
+        run: |
+          rm -rf app/src/main/assets/vosk_model_cn app/src/main/assets/vosk_model_en
+          ./gradlew assembleRelease
+          mv app/build/outputs/apk/release/*.apk \
+            "DictationHelper-v${{ steps.version.outputs.version }}-with-sherpa-model.apk"
         env:
           KEYSTORE_FILE: dictation-helper.jks
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -156,8 +170,8 @@ jobs:
 
             ### APK
             - `DictationHelper-v${{ steps.version.outputs.version }}.apk` — 标准版
-            ${{ inputs.bundle_vosk && format('- `DictationHelper-v{0}-with-models.apk` — 预装中/英文离线语音模型', steps.version.outputs.version) || '' }}
-            ${{ inputs.bundle_sherpa && format('- `DictationHelper-v{0}-with-models.apk` — 预装 sherpa-onnx 中英流式模型', steps.version.outputs.version) || '' }}
+            ${{ inputs.bundle_vosk && format('- `DictationHelper-v{0}-with-vosk-models.apk` — 预装中/英文 Vosk 离线语音模型', steps.version.outputs.version) || '' }}
+            ${{ inputs.bundle_sherpa && format('- `DictationHelper-v{0}-with-sherpa-model.apk` — 预装 sherpa-onnx 中英流式模型', steps.version.outputs.version) || '' }}
 
             ### License
             GPL-3.0-or-later

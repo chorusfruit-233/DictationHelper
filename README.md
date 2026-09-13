@@ -163,7 +163,8 @@ GitHub Actions 手动触发：Actions → **Build & Release** → **Run workflow
 
 **构建产物**（Release APK，R8 优化 + 签名 + 去日志）：
 - `DictationHelper-v{version}.apk` — 标准版
-- `DictationHelper-v{version}-with-models.apk` — 预装中/英文离线语音模型
+- `DictationHelper-v{version}-with-vosk-models.apk` — 预装中/英文 Vosk 离线语音模型
+- `DictationHelper-v{version}-with-sherpa-model.apk` — 预装 sherpa-onnx 中英流式模型
 
 **缓存**：Gradle 依赖 + 配置缓存 + Vosk 模型 zip 均自动缓存，重复构建显著加速。
 
