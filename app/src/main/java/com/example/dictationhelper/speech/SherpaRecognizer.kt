@@ -9,6 +9,8 @@ import android.content.Context
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,6 +49,7 @@ class SherpaRecognizer {
     private var stream: com.k2fsa.sherpa.onnx.OnlineStream? = null
     private var recorder: AudioRecord? = null
     private var stopSignal: AtomicBoolean? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     suspend fun init(context: Context): Boolean {
         destroy()
@@ -71,7 +74,6 @@ class SherpaRecognizer {
                 enableEndpoint = true
             )
             recognizer = OnlineRecognizer(config = config)
-            stream = recognizer?.createStream()
             error = null
             true
         } catch (e: Throwable) {
@@ -84,8 +86,7 @@ class SherpaRecognizer {
 
     fun startListening() {
         val activeRecognizer = recognizer
-        val activeStream = stream
-        if (activeRecognizer == null || activeStream == null) {
+        if (activeRecognizer == null) {
             error = "sherpa 识别器未初始化"
             return
         }
@@ -107,14 +108,21 @@ class SherpaRecognizer {
         stopSignal = activeStopSignal
         partialText = ""
         error = null
+        // A stream carries the encoder state and hypothesis of the previous utterance, and
+        // reset() only runs on an endpoint, so recording again on the same stream re-emits
+        // the words that were never closed out. Every recording gets a fresh stream.
+        stream?.release()
+        val activeStream = activeRecognizer.createStream().also { stream = it }
         isListening = true
-        val bufferSize = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-        if (bufferSize <= 0) {
+        val minBufferBytes = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+        if (minBufferBytes <= 0) {
             isListening = false
             error = "音频设备不可用"
             return
         }
-        val activeRecorder = AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, 16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize * 2)
+        // Four times the minimum gives the loop room to decode before the device buffer
+        // overflows; the old two-times buffer dropped audio whenever a decode ran late.
+        val activeRecorder = AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, 16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, minBufferBytes * 4)
         if (activeRecorder.state != AudioRecord.STATE_INITIALIZED) {
             activeRecorder.release()
             isListening = false
@@ -126,7 +134,9 @@ class SherpaRecognizer {
             try {
                 withContext(Dispatchers.IO) {
                     activeRecorder.startRecording()
-                    val buffer = ShortArray(bufferSize)
+                    val buffer = ShortArray(minBufferBytes / 2)
+                    var lastPartial = ""
+                    var lastEmitted = ""
                     while (!activeStopSignal.get()) {
                         val count = activeRecorder.read(buffer, 0, buffer.size)
                         if (count <= 0) break
@@ -136,11 +146,34 @@ class SherpaRecognizer {
                             activeRecognizer.decode(activeStream)
                         }
                         val text = activeRecognizer.getResult(activeStream).text
-                        if (text.isNotBlank()) withContext(Dispatchers.Main) { partialText = text }
-                        if (activeRecognizer.isEndpoint(activeStream)) {
-                            if (text.isNotBlank()) withContext(Dispatchers.Main) { onResult?.invoke(text) }
-                            activeRecognizer.reset(activeStream)
+                        // Posted rather than awaited: suspending here would stall the read loop
+                        // and let the device buffer overflow.
+                        if (text.isNotBlank() && text != lastPartial) {
+                            lastPartial = text
+                            mainHandler.post { partialText = text }
                         }
+                        if (activeRecognizer.isEndpoint(activeStream)) {
+                            if (text.isNotBlank()) {
+                                lastEmitted = text
+                                mainHandler.post {
+                                    partialText = ""
+                                    onResult?.invoke(text)
+                                }
+                            }
+                            activeRecognizer.reset(activeStream)
+                            lastPartial = ""
+                        }
+                    }
+                    // Flush the frames still buffered so the last words are decoded, then hand
+                    // over whatever never reached an endpoint (the usual case for a manual stop).
+                    activeStream.inputFinished()
+                    while (activeRecognizer.isReady(activeStream)) {
+                        activeRecognizer.decode(activeStream)
+                    }
+                    val tail = activeRecognizer.getResult(activeStream).text
+                    if (tail.isNotBlank() && tail != lastEmitted) {
+                        Log.d(TAG, "tail result: '$tail'")
+                        mainHandler.post { onResult?.invoke(tail) }
                     }
                 }
             } catch (e: Throwable) {
