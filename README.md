@@ -15,7 +15,7 @@
 ### 听写匹配
 - **手动输入**：输入老师说的话，自动匹配词库中最可能的单词
 - **在线语音识别**：使用系统语音服务转文字
-- **离线语音识别**：基于 [Vosk](https://alphacephei.com/vosk/) 的完全离线识别，无需网络
+- **离线语音识别**：支持 [Vosk](https://alphacephei.com/vosk/)、[sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) 和 [whisper.cpp](https://github.com/ggerganov/whisper.cpp)
 - 多种匹配方式：中文释义、英文片段、首字母、词数、读音模糊匹配
 - 置信度评分 + 匹配原因展示
 - 确认/排除候选词
@@ -36,8 +36,8 @@
 
 ### 语音识别
 - **在线模式**：Android RecognizerIntent（系统语音对话框）
-- **离线模式**：Vosk 离线引擎，中英文双模型
-- 模型手动导入（zip 文件选择）
+- **离线模式**：Vosk/sherpa-onnx 实时识别，whisper.cpp 停止录音后整段识别
+- 模型下载和手动导入
 - 中英文语言切换
 
 ### 主题外观
@@ -54,7 +54,7 @@
 | 语言 | Kotlin |
 | UI | Jetpack Compose + Material Design 3 |
 | 构建 | Gradle 9.4.1 + AGP 9.2.1 |
-| 离线语音 | Vosk Android SDK |
+| 离线语音 | Vosk Android SDK + sherpa-onnx + whisper.cpp |
 | 网络 | OkHttp 4 |
 | AI 通信 | OpenAI 兼容 Chat Completions API |
 | 持久化 | JSON 文件 + SharedPreferences |
@@ -80,7 +80,11 @@ app/src/main/java/com/example/dictationhelper/
 │   └── AiConfigManager.kt     # 多 AI 配置管理
 ├── speech/
 │   ├── VoskRecognizer.kt      # Vosk 离线识别器
-│   └── VoskModelManager.kt    # 模型文件管理 + 导入
+│   ├── SherpaRecognizer.kt    # sherpa-onnx 流式识别器
+│   ├── WhisperRecognizer.kt   # whisper.cpp 整段识别器
+│   ├── VoskModelManager.kt    # Vosk 模型文件管理
+│   ├── SherpaModelManager.kt  # sherpa-onnx 模型管理
+│   └── WhisperModelManager.kt # whisper.cpp 模型下载/导入
 ├── screens/
 │   ├── DictationScreen.kt     # 听写匹配页面
 │   ├── ImportScreen.kt        # 词表导入页面
@@ -141,6 +145,12 @@ storeFile=../app/your-keystore.jks
 在设置 → 语音设置 → sherpa-onnx 模型中导入。安装后启用 sherpa-onnx 即可进行离线中英文识别。
 应用也提供“下载官方模型”按钮，可直接下载并安装该模型；下载过程支持取消。
 
+### whisper.cpp 多语言模型
+
+whisper.cpp 使用官方多语言 `ggml-tiny.bin` 模型（约 75MB）。在设置 → 语音设置 →
+whisper.cpp 模型中下载或导入模型。该引擎会缓存整段录音，点击“停止听”后进行识别，
+适合轻声和中英文混合场景，但处理时间和内存占用高于 Vosk/sherpa-onnx。
+
 ## AI 配置
 
 支持 OpenAI 兼容 API，常见配置示例：
@@ -160,11 +170,13 @@ GitHub Actions 手动触发：Actions → **Build & Release** → **Run workflow
 - `Create Release` — 发布 GitHub Release（Tag 使用 `versionName`）
 - `Also build with Vosk models` — 额外构建预装中英文离线模型的 APK
 - `Also build with sherpa-onnx model` — 额外构建预装官方中英流式模型的 APK（模型约 500MB）
+- `Also build with whisper.cpp model` — 额外构建预装多语言 tiny 模型的 APK（模型约 75MB）
 
 **构建产物**（Release APK，R8 优化 + 签名 + 去日志）：
 - `DictationHelper-v{version}.apk` — 标准版
 - `DictationHelper-v{version}-with-vosk-models.apk` — 预装中/英文 Vosk 离线语音模型
 - `DictationHelper-v{version}-with-sherpa-model.apk` — 预装 sherpa-onnx 中英流式模型
+- `DictationHelper-v{version}-with-whisper-model.apk` — 预装 whisper.cpp 多语言 tiny 模型
 
 **缓存**：Gradle 依赖 + 配置缓存 + Vosk 模型 zip 均自动缓存，重复构建显著加速。
 

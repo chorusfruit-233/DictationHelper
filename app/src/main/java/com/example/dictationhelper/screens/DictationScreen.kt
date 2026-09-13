@@ -72,6 +72,7 @@ import com.example.dictationhelper.matching.RuleParser
 import com.example.dictationhelper.model.WordItem
 import com.example.dictationhelper.speech.VoskRecognizer
 import com.example.dictationhelper.speech.SherpaRecognizer
+import com.example.dictationhelper.speech.WhisperRecognizer
 import com.example.dictationhelper.speech.SherpaModelManager
 import com.example.dictationhelper.ui.theme.ThemeSettings
 import kotlinx.coroutines.Job
@@ -185,8 +186,12 @@ fun DictationScreen(onBack: () -> Unit = {}) {
     val sherpaRecognizer = remember {
         SherpaRecognizer().apply { onResult = { text -> handleInput(text) } }
     }
+    val whisperRecognizer = remember {
+        WhisperRecognizer().apply { onResult = { text -> handleInput(text) } }
+    }
     val useVosk = ThemeSettings.useVoskOffline
     val useSherpa = ThemeSettings.useSherpaOffline
+    val useWhisper = ThemeSettings.useWhisperOffline
     LaunchedEffect(useVosk, speechLang) {
         Log.d("Dictation", "Vosk language effect: useVosk=$useVosk speechLang=$speechLang")
         if (useVosk) {
@@ -204,10 +209,19 @@ fun DictationScreen(onBack: () -> Unit = {}) {
             sherpaRecognizer.destroy()
         }
     }
+    LaunchedEffect(useWhisper) {
+        Log.d("Dictation", "Whisper effect: useWhisper=$useWhisper")
+        if (useWhisper) {
+            whisperRecognizer.init(context)
+        } else {
+            whisperRecognizer.destroy()
+        }
+    }
     DisposableEffect(Unit) {
         onDispose {
             voskRecognizer.destroy()
             sherpaRecognizer.destroy()
+            whisperRecognizer.destroy()
         }
     }
 
@@ -244,7 +258,7 @@ fun DictationScreen(onBack: () -> Unit = {}) {
 
             // --- microphone section ---
             item {
-                if (useSherpa) {
+                if (useSherpa || useWhisper) {
                     OutlinedButton(
                         onClick = {},
                         modifier = Modifier.fillMaxWidth().height(36.dp),
@@ -252,7 +266,10 @@ fun DictationScreen(onBack: () -> Unit = {}) {
                             containerColor = MaterialTheme.colorScheme.primaryContainer
                         )
                     ) {
-                        Text("中英双语（sherpa-onnx）", fontSize = 13.sp)
+                        Text(
+                            if (useSherpa) "中英双语（sherpa-onnx）" else "中英双语（whisper.cpp）",
+                            fontSize = 13.sp
+                        )
                     }
                 } else {
                     Row(
@@ -309,15 +326,25 @@ fun DictationScreen(onBack: () -> Unit = {}) {
                 val preparingModel = useSherpa && SherpaModelManager.isPreparing.value
                 Button(
                     onClick = {
-                        Log.d("Dictation", "button clicked: useVosk=$useVosk useSherpa=$useSherpa hasPerm=$hasPermission")
+                        Log.d("Dictation", "button clicked: useVosk=$useVosk useSherpa=$useSherpa useWhisper=$useWhisper hasPerm=$hasPermission")
                         if (!hasPermission) {
                             permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                        } else if (useVosk || useSherpa) {
-                            if (if (useSherpa) sherpaRecognizer.isListening else voskRecognizer.isListening) {
+                        } else if (useVosk || useSherpa || useWhisper) {
+                            val engineListening = when {
+                                useWhisper -> whisperRecognizer.isListening
+                                useSherpa -> sherpaRecognizer.isListening
+                                else -> voskRecognizer.isListening
+                            }
+                            if (engineListening) {
                                 voskRecognizer.stopListening()
                                 sherpaRecognizer.stopListening()
+                                whisperRecognizer.stopListening()
                             } else {
-                                if (useSherpa) sherpaRecognizer.startListening() else voskRecognizer.startListening()
+                                when {
+                                    useWhisper -> whisperRecognizer.startListening()
+                                    useSherpa -> sherpaRecognizer.startListening()
+                                    else -> voskRecognizer.startListening()
+                                }
                             }
                         } else {
                             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -332,9 +359,10 @@ fun DictationScreen(onBack: () -> Unit = {}) {
                             }
                         }
                     },
-                    enabled = !preparingModel,
+                    enabled = !preparingModel && !(useWhisper && whisperRecognizer.isProcessing),
                     modifier = Modifier.fillMaxWidth().height(48.dp),
-                        colors = if ((useVosk || useSherpa) && (voskRecognizer.isListening || sherpaRecognizer.isListening))
+                    colors = if ((useVosk || useSherpa || useWhisper) &&
+                        (voskRecognizer.isListening || sherpaRecognizer.isListening || whisperRecognizer.isListening))
                         ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))
                     else
                         ButtonDefaults.buttonColors()
@@ -343,20 +371,28 @@ fun DictationScreen(onBack: () -> Unit = {}) {
                         when {
                             preparingModel -> "正在准备内置模型…"
                             !hasPermission -> "授予麦克风权限"
-                            (useVosk && voskRecognizer.isListening) || (useSherpa && sherpaRecognizer.isListening) -> "停止听"
+                            (useWhisper && whisperRecognizer.isProcessing) -> "识别中..."
+                            (useVosk && voskRecognizer.isListening) ||
+                                (useSherpa && sherpaRecognizer.isListening) ||
+                                (useWhisper && whisperRecognizer.isListening) -> "停止听"
                             else -> "语音输入"
                         }
                     )
                 }
             }
 
-            if (useVosk || useSherpa) {
+            if (useVosk || useSherpa || useWhisper) {
                 voskRecognizer.error?.let { err ->
                     item {
                         Text(text = err, fontSize = 13.sp, color = MaterialTheme.colorScheme.error)
                     }
                 }
                 sherpaRecognizer.error?.let { err ->
+                    item {
+                        Text(text = err, fontSize = 13.sp, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+                whisperRecognizer.error?.let { err ->
                     item {
                         Text(text = err, fontSize = 13.sp, color = MaterialTheme.colorScheme.error)
                     }
@@ -384,6 +420,16 @@ fun DictationScreen(onBack: () -> Unit = {}) {
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f))
                         ) {
                             Text(sherpaRecognizer.partialText, modifier = Modifier.padding(12.dp), fontSize = 15.sp)
+                        }
+                    }
+                }
+                if (whisperRecognizer.partialText.isNotEmpty()) {
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f))
+                        ) {
+                            Text(whisperRecognizer.partialText, modifier = Modifier.padding(12.dp), fontSize = 15.sp)
                         }
                     }
                 }

@@ -5,26 +5,15 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Left sound waves (3 arcs, within safe zone x=18..90) -->
-    <path android:fillColor="#00000000" android:strokeColor="#FFFFFF" android:strokeWidth="1.8" android:pathData="M41,44 Q34,54 41,64" />
-    <path android:fillColor="#00000000" android:strokeColor="#FFFFFF" android:strokeWidth="1.8" android:pathData="M37,40 Q26,54 37,68" />
-    <path android:fillColor="#00000000" android:strokeColor="#FFFFFF" android:strokeWidth="1.8" android:pathData="M33,36 Q18,54 33,72" />
+    <!-- Sound waves: the app listens for both speech and dictation. -->
+    <path android:fillColor="#00000000" android:strokeColor="#5EEAD4" android:strokeWidth="3" android:strokeLineCap="round" android:pathData="M22,48 Q16,54 22,60" />
+    <path android:fillColor="#00000000" android:strokeColor="#5EEAD4" android:strokeWidth="3" android:strokeLineCap="round" android:pathData="M86,48 Q92,54 86,60" />
 
-    <!-- Right sound waves (3 arcs, mirrored) -->
-    <path android:fillColor="#00000000" android:strokeColor="#FFFFFF" android:strokeWidth="1.8" android:pathData="M67,44 Q74,54 67,64" />
-    <path android:fillColor="#00000000" android:strokeColor="#FFFFFF" android:strokeWidth="1.8" android:pathData="M71,40 Q82,54 71,68" />
-    <path android:fillColor="#00000000" android:strokeColor="#FFFFFF" android:strokeWidth="1.8" android:pathData="M75,36 Q90,54 75,72" />
+    <!-- Speech bubble, with a small tail that points toward the next word. -->
+    <path android:fillColor="#FFFFFF" android:pathData="M31,28 C31,23 35,20 40,20 L68,20 C73,20 77,23 77,28 L77,61 C77,66 73,69 68,69 L52,69 L43,78 L44,69 L40,69 C35,69 31,66 31,61 Z" />
 
-    <!-- Mic capsule (rounded oval at top) -->
-    <path android:fillColor="#FFFFFF" android:pathData="M45,23 C45,17 48,14 54,14 C60,14 63,17 63,23 L63,38 C63,44 60,47 54,47 C48,47 45,44 45,38 Z" />
-
-    <!-- Mic neck -->
-    <path android:fillColor="#FFFFFF" android:pathData="M49,47 L59,47 L59,51 L49,51 Z" />
-
-    <!-- Mic body (handle) -->
-    <path android:fillColor="#FFFFFF" android:pathData="M42,51 C40,51 39,52.5 39,54 L39,68 C39,69.5 40,71 42,71 L66,71 C68,71 69,69.5 69,68 L69,54 C69,52.5 68,51 66,51 Z" />
-
-    <!-- Mic base -->
-    <path android:fillColor="#FFFFFF" android:pathData="M38,71 L70,71 L72,76 L36,76 Z" />
+    <!-- Stylized D / audio glyph inside the bubble. -->
+    <path android:fillColor="#2563EB" android:pathData="M42,32 L51,32 C59,32 64,36 64,45 C64,54 59,58 51,58 L42,58 Z M48,38 L48,52 L51,52 C55,52 58,50 58,45 C58,40 55,38 51,38 Z" />
+    <path android:fillColor="#5EEAD4" android:pathData="M39,37 L42,37 L42,53 L39,53 Z" />
 
 </vector>

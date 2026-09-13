@@ -20,6 +20,7 @@ object ThemeSettings {
     var useLlm by mutableStateOf(false)
     var useVoskOffline by mutableStateOf(false)
     var useSherpaOffline by mutableStateOf(false)
+    var useWhisperOffline by mutableStateOf(false)
 
     fun load(context: Context) {
         val prefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
@@ -31,6 +32,7 @@ object ThemeSettings {
         useLlm = prefs.getBoolean("use_llm", false)
         useVoskOffline = prefs.getBoolean("use_vosk_offline", false)
         useSherpaOffline = prefs.getBoolean("use_sherpa_offline", false)
+        useWhisperOffline = prefs.getBoolean("use_whisper_offline", false)
     }
 
     fun save(context: Context) {
@@ -44,6 +46,7 @@ object ThemeSettings {
             .putBoolean("use_llm", useLlm)
             .putBoolean("use_vosk_offline", useVoskOffline)
             .putBoolean("use_sherpa_offline", useSherpaOffline)
+            .putBoolean("use_whisper_offline", useWhisperOffline)
             .apply()
     }
 }

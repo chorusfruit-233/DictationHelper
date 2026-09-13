@@ -41,6 +41,15 @@ The bundled native runtime includes ONNX Runtime components, licensed under the 
 The optional bundled sherpa-onnx model is downloaded from the official sherpa-onnx release
 and is not included in the standard APK. Verify the model license before redistribution.
 
+## whisper.cpp and ggml
+
+- Library: `whisper.cpp` and its bundled `ggml` CPU backend
+- License: MIT License
+- Source: https://github.com/ggerganov/whisper.cpp
+
+The optional `ggml-tiny.bin` model is downloaded from the official whisper.cpp
+Hugging Face repository. Verify the model license before redistribution.
+
 ## Vosk Speech Models
 
 Before distributing APK files that include offline speech models, verify and document the license of each model package.

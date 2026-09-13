@@ -15,6 +15,10 @@ on:
         description: 'Also build APK with the official sherpa-onnx streaming model (~511MB)'
         type: boolean
         default: false
+      bundle_whisper:
+        description: 'Also build APK with the whisper.cpp multilingual tiny model (~75MB)'
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -115,10 +119,26 @@ jobs:
             "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20.tar.bz2" \
             -o /tmp/sherpa-cache/sherpa_model.tar.bz2
 
+      - name: Restore whisper.cpp model cache
+        if: ${{ inputs.bundle_whisper }}
+        id: whisper-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/whisper-cache
+          key: whisper-cpp-ggml-tiny-multilingual
+
+      - name: Download whisper.cpp model
+        if: ${{ inputs.bundle_whisper && steps.whisper-cache.outputs.cache-hit != 'true' }}
+        run: |
+          mkdir -p /tmp/whisper-cache
+          curl -L --connect-timeout 30 --max-time 1800 \
+            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin?download=true" \
+            -o /tmp/whisper-cache/ggml-tiny.bin
+
       - name: Build APK with Vosk models
         if: ${{ inputs.bundle_vosk }}
         run: |
-          rm -rf app/src/main/assets/sherpa_model_streaming
+          rm -rf app/src/main/assets/sherpa_model_streaming app/src/main/assets/whisper_model
           ./gradlew clean assembleRelease
           unzip -l app/build/outputs/apk/release/*.apk | grep -q 'assets/vosk_model_cn/'
           unzip -l app/build/outputs/apk/release/*.apk | grep -q 'assets/vosk_model_en/'
@@ -156,11 +176,28 @@ jobs:
       - name: Build APK with sherpa-onnx model
         if: ${{ inputs.bundle_sherpa }}
         run: |
-          rm -rf app/src/main/assets/vosk_model_cn app/src/main/assets/vosk_model_en
+          rm -rf app/src/main/assets/vosk_model_cn app/src/main/assets/vosk_model_en app/src/main/assets/whisper_model
           ./gradlew clean assembleRelease
           unzip -l app/build/outputs/apk/release/*.apk | grep -q 'assets/sherpa_model_streaming/'
           mv app/build/outputs/apk/release/*.apk \
             "DictationHelper-v${{ steps.version.outputs.version }}-with-sherpa-model.apk"
+        env:
+          KEYSTORE_FILE: dictation-helper.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+      - name: Build APK with whisper.cpp model
+        if: ${{ inputs.bundle_whisper }}
+        run: |
+          rm -rf app/src/main/assets/vosk_model_cn app/src/main/assets/vosk_model_en app/src/main/assets/sherpa_model_streaming
+          mkdir -p app/src/main/assets/whisper_model
+          cp /tmp/whisper-cache/ggml-tiny.bin app/src/main/assets/whisper_model/ggml-tiny.bin
+          test "$(stat -c%s app/src/main/assets/whisper_model/ggml-tiny.bin)" -gt 1000000
+          ./gradlew clean assembleRelease
+          unzip -l app/build/outputs/apk/release/*.apk | grep -q 'assets/whisper_model/ggml-tiny.bin'
+          mv app/build/outputs/apk/release/*.apk \
+            "DictationHelper-v${{ steps.version.outputs.version }}-with-whisper-model.apk"
         env:
           KEYSTORE_FILE: dictation-helper.jks
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -188,6 +225,7 @@ jobs:
             - `DictationHelper-v${{ steps.version.outputs.version }}.apk` — 标准版
             ${{ inputs.bundle_vosk && format('- `DictationHelper-v{0}-with-vosk-models.apk` — 预装中/英文 Vosk 离线语音模型', steps.version.outputs.version) || '' }}
             ${{ inputs.bundle_sherpa && format('- `DictationHelper-v{0}-with-sherpa-model.apk` — 预装 sherpa-onnx 中英流式模型', steps.version.outputs.version) || '' }}
+            ${{ inputs.bundle_whisper && format('- `DictationHelper-v{0}-with-whisper-model.apk` — 预装 whisper.cpp 多语言 tiny 模型', steps.version.outputs.version) || '' }}
 
             ### License
             GPL-3.0-or-later

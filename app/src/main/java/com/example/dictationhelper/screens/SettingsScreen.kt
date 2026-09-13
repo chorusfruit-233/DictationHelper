@@ -58,6 +58,7 @@ import com.example.dictationhelper.llm.AiProfile
 import com.example.dictationhelper.llm.DICTATION_PROMPT_TEMPLATE
 import com.example.dictationhelper.speech.VoskModelManager
 import com.example.dictationhelper.speech.SherpaModelManager
+import com.example.dictationhelper.speech.WhisperModelManager
 import com.example.dictationhelper.ui.theme.ThemeSettings
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -280,6 +281,7 @@ fun SettingsScreen() {
                     var showCnModelDialog by remember { mutableStateOf(false) }
                     var showEnModelDialog by remember { mutableStateOf(false) }
                     var showSherpaModelDialog by remember { mutableStateOf(false) }
+                    var showWhisperModelDialog by remember { mutableStateOf(false) }
                     val anyReady = cnReady || enReady
                     var sherpaReady by remember { mutableStateOf(SherpaModelManager.isReady(context)) }
                     LaunchedEffect(Unit) {
@@ -288,6 +290,15 @@ fun SettingsScreen() {
                     LaunchedEffect(SherpaModelManager.isImporting.value) {
                         if (!SherpaModelManager.isImporting.value) {
                             sherpaReady = SherpaModelManager.isReady(context)
+                        }
+                    }
+                    var whisperReady by remember { mutableStateOf(WhisperModelManager.isReady(context)) }
+                    LaunchedEffect(Unit) {
+                        whisperReady = WhisperModelManager.ensureReady(context)
+                    }
+                    LaunchedEffect(WhisperModelManager.isDownloading.value) {
+                        if (!WhisperModelManager.isDownloading.value) {
+                            whisperReady = WhisperModelManager.isReady(context)
                         }
                     }
 
@@ -305,7 +316,10 @@ fun SettingsScreen() {
                                 showCnModelDialog = true
                             } else {
                                 ThemeSettings.useVoskOffline = it
-                                if (it) ThemeSettings.useSherpaOffline = false
+                                if (it) {
+                                    ThemeSettings.useSherpaOffline = false
+                                    ThemeSettings.useWhisperOffline = false
+                                }
                                 ThemeSettings.save(context)
                             }
                         }
@@ -327,6 +341,31 @@ fun SettingsScreen() {
                             else {
                                 ThemeSettings.useSherpaOffline = it
                                 ThemeSettings.useVoskOffline = false
+                                ThemeSettings.useWhisperOffline = false
+                                ThemeSettings.save(context)
+                            }
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    SettingsSwitchRow(
+                        label = "离线语音识别 (whisper.cpp)",
+                        description = if (whisperReady) {
+                            "已安装多语言模型，停止录音后进行高准确率识别"
+                        } else {
+                            "需下载或导入 whisper.cpp 多语言模型（约 75MB）"
+                        },
+                        checked = ThemeSettings.useWhisperOffline,
+                        onCheckedChange = {
+                            if (it && !whisperReady) {
+                                showWhisperModelDialog = true
+                            } else {
+                                ThemeSettings.useWhisperOffline = it
+                                if (it) {
+                                    ThemeSettings.useVoskOffline = false
+                                    ThemeSettings.useSherpaOffline = false
+                                }
                                 ThemeSettings.save(context)
                             }
                         }
@@ -343,6 +382,14 @@ fun SettingsScreen() {
                         },
                         summaryColor = if (sherpaReady) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         onClick = { showSherpaModelDialog = true }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingsClickRow(
+                        label = "whisper.cpp 模型",
+                        summary = if (whisperReady) "已安装 ✓（tiny，多语言）" else "未安装",
+                        summaryColor = if (whisperReady) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        onClick = { showWhisperModelDialog = true }
                     )
 
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
@@ -381,6 +428,9 @@ fun SettingsScreen() {
                     }
                     if (showSherpaModelDialog) {
                         SherpaModelImportDialog(onDismiss = { showSherpaModelDialog = false })
+                    }
+                    if (showWhisperModelDialog) {
+                        WhisperModelImportDialog(onDismiss = { showWhisperModelDialog = false })
                     }
                 }
             }
@@ -852,6 +902,72 @@ fun SherpaModelImportDialog(onDismiss: () -> Unit) {
             } else {
                 OutlinedButton(onClick = {
                     SherpaModelManager.cancelImport()
+                    status = "idle"
+                }) { Text("取消下载") }
+            }
+        },
+        dismissButton = {
+            if (status != "importing") TextButton(onClick = onDismiss) { Text("取消") }
+        }
+    )
+}
+
+@Composable
+fun WhisperModelImportDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    var status by remember { mutableStateOf("idle") }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        status = "importing"
+        WhisperModelManager.importFromUri(context, uri) { success -> status = if (success) "done" else "error" }
+    }
+
+    AlertDialog(
+        onDismissRequest = {
+            if (status == "importing") {
+                WhisperModelManager.cancel()
+                status = "idle"
+            } else onDismiss()
+        },
+        title = { Text("安装 whisper.cpp 模型") },
+        text = {
+            Column {
+                when (status) {
+                    "idle" -> Text(
+                        "whisper.cpp 使用多语言 tiny 模型（约 75MB）。它会在停止录音后进行整段识别，准确率更高但处理时间较长。"
+                    )
+                    "importing" -> {
+                        LinearProgressIndicator(
+                            progress = { WhisperModelManager.progress.floatValue },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Text(
+                            "正在下载/导入模型，请保持应用打开 (${(WhisperModelManager.progress.floatValue * 100).toInt()}%)",
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                    "done" -> Text("模型安装成功，现在可以启用 whisper.cpp。", color = MaterialTheme.colorScheme.primary)
+                    else -> Text(
+                        "安装失败：${WhisperModelManager.error.value ?: "模型格式无效"}",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            when (status) {
+                "idle", "error" -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { picker.launch("application/octet-stream") }) { Text("选择模型") }
+                    Button(onClick = {
+                        status = "importing"
+                        WhisperModelManager.downloadOfficialModel(context) { success ->
+                            status = if (success) "done" else "error"
+                        }
+                    }) { Text("下载官方模型") }
+                }
+                "done" -> Button(onClick = onDismiss) { Text("完成") }
+                else -> OutlinedButton(onClick = {
+                    WhisperModelManager.cancel()
                     status = "idle"
                 }) { Text("取消下载") }
             }
