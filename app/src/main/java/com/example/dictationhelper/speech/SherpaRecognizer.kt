@@ -6,9 +6,9 @@
 package com.example.dictationhelper.speech
 
 import android.content.Context
+import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioRecord
-import android.media.MediaRecorder
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -84,7 +84,7 @@ class SherpaRecognizer {
         }
     }
 
-    fun startListening() {
+    fun startListening(inputDevice: AudioDeviceInfo? = null) {
         val activeRecognizer = recognizer
         if (activeRecognizer == null) {
             error = "sherpa 识别器未初始化"
@@ -122,11 +122,11 @@ class SherpaRecognizer {
         }
         // Four times the minimum gives the loop room to decode before the device buffer
         // overflows; the old two-times buffer dropped audio whenever a decode ran late.
-        val activeRecorder = AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, 16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, minBufferBytes * 4)
-        if (activeRecorder.state != AudioRecord.STATE_INITIALIZED) {
-            activeRecorder.release()
+        val activeRecorder = try {
+            createSpeechRecorder(minBufferBytes * 4, inputDevice)
+        } catch (e: Exception) {
             isListening = false
-            error = "麦克风初始化失败"
+            error = "麦克风初始化失败: ${e.message}"
             return
         }
         recorder = activeRecorder
@@ -140,6 +140,7 @@ class SherpaRecognizer {
                     while (!activeStopSignal.get()) {
                         val count = activeRecorder.read(buffer, 0, buffer.size)
                         if (count <= 0) break
+                        if (!activeStopSignal.get()) verifySpeechInput(activeRecorder, inputDevice)
                         val samples = FloatArray(count) { buffer[it] / 32768.0f }
                         activeStream.acceptWaveform(samples, 16000)
                         while (activeRecognizer.isReady(activeStream)) {

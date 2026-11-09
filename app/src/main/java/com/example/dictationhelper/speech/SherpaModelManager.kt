@@ -248,7 +248,9 @@ object SherpaModelManager {
         val staging = File(context.cacheDir, "sherpa_model_staging")
         if (staging.exists()) staging.deleteRecursively()
         staging.mkdirs()
-        val bzip2 = archive.inputStream().use { it.readNBytes(3).contentEquals(byteArrayOf('B'.code.toByte(), 'Z'.code.toByte(), 'h'.code.toByte())) }
+        val bzip2 = archive.inputStream().use {
+            it.read() == 'B'.code && it.read() == 'Z'.code && it.read() == 'h'.code
+        }
         if (archive.name.endsWith(".tar.bz2") || bzip2) {
             TarArchiveInputStream(BZip2CompressorInputStream(BufferedInputStream(archive.inputStream()))).use { tar ->
                 var entry = tar.nextTarEntry
