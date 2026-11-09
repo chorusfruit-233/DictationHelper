@@ -6,9 +6,9 @@
 package com.example.dictationhelper.speech
 
 import android.content.Context
+import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioRecord
-import android.media.MediaRecorder
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -63,7 +63,7 @@ class WhisperRecognizer {
         }
     }
 
-    fun startListening() {
+    fun startListening(inputDevice: AudioDeviceInfo? = null) {
         val activeContext = contextPtr
         if (activeContext == 0L) {
             error = "whisper 识别器未初始化"
@@ -83,19 +83,13 @@ class WhisperRecognizer {
             error = "音频设备不可用"
             return
         }
-        val activeRecorder = AudioRecord(
-            MediaRecorder.AudioSource.VOICE_RECOGNITION,
-            16_000,
-            AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT,
-            bufferSize * 2
-        )
-        if (activeRecorder.state != AudioRecord.STATE_INITIALIZED) {
-            activeRecorder.release()
-            error = "麦克风初始化失败"
+        val activeRecorder = try {
+            createSpeechRecorder(bufferSize * 2, inputDevice)
+        } catch (e: Exception) {
+            isListening = false
+            error = "麦克风初始化失败: ${e.message}"
             return
         }
-
         val activeStopSignal = AtomicBoolean(false)
         stopSignal = activeStopSignal
         recorder = activeRecorder
@@ -113,6 +107,7 @@ class WhisperRecognizer {
                     while (!activeStopSignal.get()) {
                         val count = activeRecorder.read(buffer, 0, buffer.size)
                         if (count <= 0) break
+                        if (!activeStopSignal.get()) verifySpeechInput(activeRecorder, inputDevice)
                         for (index in 0 until count) samples.add(buffer[index] / 32768.0f)
                         ensureActive()
                     }

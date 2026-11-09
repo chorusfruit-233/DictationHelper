@@ -21,6 +21,10 @@ object ThemeSettings {
     var useVoskOffline by mutableStateOf(false)
     var useSherpaOffline by mutableStateOf(false)
     var useWhisperOffline by mutableStateOf(false)
+    private val bluetoothMicrophoneState = mutableStateOf(true)
+    var preferBluetoothMicrophone: Boolean
+        get() = bluetoothMicrophoneState.value
+        set(value) { bluetoothMicrophoneState.value = value }
 
     fun load(context: Context) {
         val prefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
@@ -33,6 +37,7 @@ object ThemeSettings {
         useVoskOffline = prefs.getBoolean("use_vosk_offline", false)
         useSherpaOffline = prefs.getBoolean("use_sherpa_offline", false)
         useWhisperOffline = prefs.getBoolean("use_whisper_offline", false)
+        preferBluetoothMicrophone = prefs.getBoolean("prefer_bluetooth_microphone", true)
     }
 
     fun save(context: Context) {
@@ -47,6 +52,7 @@ object ThemeSettings {
             .putBoolean("use_vosk_offline", useVoskOffline)
             .putBoolean("use_sherpa_offline", useSherpaOffline)
             .putBoolean("use_whisper_offline", useWhisperOffline)
+            .putBoolean("prefer_bluetooth_microphone", preferBluetoothMicrophone)
             .apply()
     }
 }

@@ -276,6 +276,16 @@ fun SettingsScreen() {
             item {
                 SettingsSectionHeader("语音设置")
                 SettingsCard {
+                    SettingsSwitchRow(
+                        label = "优先使用蓝牙麦克风",
+                        description = "离线识别使用已连接的蓝牙耳机麦克风；未连接时使用默认麦克风。在线识别由系统语音服务选择设备",
+                        checked = ThemeSettings.preferBluetoothMicrophone,
+                        onCheckedChange = {
+                            ThemeSettings.preferBluetoothMicrophone = it
+                            ThemeSettings.save(context)
+                        }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     val cnReady = VoskModelManager.isModelReady(context, "zh-CN")
                     val enReady = VoskModelManager.isModelReady(context, "en-US")
                     var showCnModelDialog by remember { mutableStateOf(false) }

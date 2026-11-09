@@ -8,6 +8,7 @@ package com.example.dictationhelper.screens
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.speech.RecognizerIntent
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -60,6 +61,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.dictationhelper.data.WordRepository
 import com.example.dictationhelper.llm.AiConfigManager
 import com.example.dictationhelper.llm.LlmClient
@@ -71,11 +75,14 @@ import com.example.dictationhelper.matching.ParsedAction
 import com.example.dictationhelper.matching.RuleParser
 import com.example.dictationhelper.model.WordItem
 import com.example.dictationhelper.speech.VoskRecognizer
+import com.example.dictationhelper.speech.BluetoothMicrophone
 import com.example.dictationhelper.speech.SherpaRecognizer
 import com.example.dictationhelper.speech.WhisperRecognizer
 import com.example.dictationhelper.speech.SherpaModelManager
 import com.example.dictationhelper.ui.theme.ThemeSettings
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -92,10 +99,6 @@ fun DictationScreen(onBack: () -> Unit = {}) {
             ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         )
     }
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted -> hasPermission = granted }
-
     var speechLang by remember { mutableStateOf("zh-CN") }
 
     val appPrefs = remember { context.getSharedPreferences("app_settings", android.content.Context.MODE_PRIVATE) }
@@ -192,6 +195,92 @@ fun DictationScreen(onBack: () -> Unit = {}) {
     val useVosk = ThemeSettings.useVoskOffline
     val useSherpa = ThemeSettings.useSherpaOffline
     val useWhisper = ThemeSettings.useWhisperOffline
+    val bluetoothMicrophone = remember { BluetoothMicrophone(context) }
+    var connectingMicrophone by remember { mutableStateOf(false) }
+    var microphoneJob by remember { mutableStateOf<Job?>(null) }
+    var microphoneStatus by remember { mutableStateOf<String?>(null) }
+    var microphoneError by remember { mutableStateOf<String?>(null) }
+    var bluetoothPermissionDenied by remember { mutableStateOf(false) }
+    val engineListening = voskRecognizer.isListening || sherpaRecognizer.isListening || whisperRecognizer.isListening
+
+    fun stopMicrophone() {
+        microphoneJob?.cancel()
+        connectingMicrophone = false
+        voskRecognizer.stopListening()
+        sherpaRecognizer.stopListening()
+        whisperRecognizer.stopListening()
+        bluetoothMicrophone.release()
+    }
+
+    fun startOfflineRecording() {
+        microphoneJob = scope.launch {
+            connectingMicrophone = true
+            microphoneStatus = null
+            microphoneError = null
+            try {
+                val bluetoothAllowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+                val input = if (ThemeSettings.preferBluetoothMicrophone && bluetoothAllowed) {
+                    bluetoothMicrophone.connect()
+                } else null
+                microphoneStatus = when {
+                    input != null -> "蓝牙麦克风：${input.productName}"
+                    ThemeSettings.preferBluetoothMicrophone && !bluetoothAllowed ->
+                        "未授予蓝牙权限，本次使用默认麦克风；可在系统设置中允许“附近的设备”权限"
+                    else -> "使用默认麦克风"
+                }
+                when {
+                    useWhisper -> whisperRecognizer.startListening(input)
+                    useSherpa -> sherpaRecognizer.startListening(input)
+                    else -> voskRecognizer.startListening(input)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                microphoneError = "麦克风启动失败：${e.localizedMessage}"
+            } finally {
+                connectingMicrophone = false
+                if (!voskRecognizer.isListening && !sherpaRecognizer.isListening && !whisperRecognizer.isListening) {
+                    bluetoothMicrophone.release()
+                }
+            }
+        }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && permissions.containsKey(Manifest.permission.BLUETOOTH_CONNECT)) {
+            bluetoothPermissionDenied = permissions[Manifest.permission.BLUETOOTH_CONNECT] != true
+        }
+        if (hasPermission && (useVosk || useSherpa || useWhisper)) startOfflineRecording()
+    }
+
+    // Stop capture when the app leaves the foreground or a different engine/language
+    // is selected, including while the Bluetooth connection is still pending.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, useVosk, useSherpa, useWhisper, speechLang, ThemeSettings.preferBluetoothMicrophone) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) stopMicrophone()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            stopMicrophone()
+        }
+    }
+    LaunchedEffect(connectingMicrophone, engineListening) {
+        if (!connectingMicrophone && !engineListening) bluetoothMicrophone.release()
+        while (engineListening && bluetoothMicrophone.inputDevice != null) {
+            delay(300)
+            if (!bluetoothMicrophone.isRouteConnected()) {
+                microphoneError = "蓝牙麦克风已断开，录音已停止；重新连接耳机后可再次录音"
+                stopMicrophone()
+                break
+            }
+        }
+    }
     LaunchedEffect(useVosk, speechLang) {
         Log.d("Dictation", "Vosk language effect: useVosk=$useVosk speechLang=$speechLang")
         if (useVosk) {
@@ -327,25 +416,20 @@ fun DictationScreen(onBack: () -> Unit = {}) {
                 Button(
                     onClick = {
                         Log.d("Dictation", "button clicked: useVosk=$useVosk useSherpa=$useSherpa useWhisper=$useWhisper hasPerm=$hasPermission")
-                        if (!hasPermission) {
-                            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                        val needsBluetoothPermission = (useVosk || useSherpa || useWhisper) &&
+                            ThemeSettings.preferBluetoothMicrophone && !bluetoothPermissionDenied &&
+                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                            ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED
+                        if (connectingMicrophone || engineListening) {
+                            stopMicrophone()
+                        } else if (!hasPermission || needsBluetoothPermission) {
+                            permissionLauncher.launch(buildList {
+                                if (!hasPermission) add(Manifest.permission.RECORD_AUDIO)
+                                if (needsBluetoothPermission) add(Manifest.permission.BLUETOOTH_CONNECT)
+                            }.toTypedArray())
                         } else if (useVosk || useSherpa || useWhisper) {
-                            val engineListening = when {
-                                useWhisper -> whisperRecognizer.isListening
-                                useSherpa -> sherpaRecognizer.isListening
-                                else -> voskRecognizer.isListening
-                            }
-                            if (engineListening) {
-                                voskRecognizer.stopListening()
-                                sherpaRecognizer.stopListening()
-                                whisperRecognizer.stopListening()
-                            } else {
-                                when {
-                                    useWhisper -> whisperRecognizer.startListening()
-                                    useSherpa -> sherpaRecognizer.startListening()
-                                    else -> voskRecognizer.startListening()
-                                }
-                            }
+                            startOfflineRecording()
                         } else {
                             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -370,6 +454,7 @@ fun DictationScreen(onBack: () -> Unit = {}) {
                     Text(
                         when {
                             preparingModel -> "正在准备内置模型…"
+                            connectingMicrophone -> "正在连接蓝牙麦克风…（点击取消）"
                             !hasPermission -> "授予麦克风权限"
                             (useWhisper && whisperRecognizer.isProcessing) -> "识别中..."
                             (useVosk && voskRecognizer.isListening) ||
@@ -382,6 +467,12 @@ fun DictationScreen(onBack: () -> Unit = {}) {
             }
 
             if (useVosk || useSherpa || useWhisper) {
+                microphoneStatus?.let { status ->
+                    item { Text(status, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                }
+                microphoneError?.let { message ->
+                    item { Text(message, fontSize = 13.sp, color = MaterialTheme.colorScheme.error) }
+                }
                 voskRecognizer.error?.let { err ->
                     item {
                         Text(text = err, fontSize = 13.sp, color = MaterialTheme.colorScheme.error)

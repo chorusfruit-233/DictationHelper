@@ -6,9 +6,9 @@
 package com.example.dictationhelper.speech
 
 import android.content.Context
+import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioRecord
-import android.media.MediaRecorder
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -73,7 +73,7 @@ class VoskRecognizer {
         }
     }
 
-    fun startListening() {
+    fun startListening(inputDevice: AudioDeviceInfo? = null) {
         Log.d(TAG, "startListening")
         if (recognizer == null) {
             Log.e(TAG, "recognizer is null")
@@ -112,18 +112,11 @@ class VoskRecognizer {
             return
         }
 
-        audioRecord = AudioRecord(
-            MediaRecorder.AudioSource.VOICE_RECOGNITION,
-            16000, AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT, bufferSize * 2
-        )
-
-        if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
-            Log.e(TAG, "AudioRecord init failed, state=${audioRecord?.state}")
+        audioRecord = try {
+            createSpeechRecorder(bufferSize * 2, inputDevice)
+        } catch (e: Exception) {
             isListening = false
-            error = "麦克风初始化失败"
-            audioRecord?.release()
-            audioRecord = null
+            error = "麦克风初始化失败: ${e.message}"
             return
         }
 
@@ -141,6 +134,7 @@ class VoskRecognizer {
                 while (!shouldStop) {
                     val count = activeAudioRecord.read(buffer, 0, buffer.size)
                     if (count <= 0) break
+                    if (!shouldStop) verifySpeechInput(activeAudioRecord, inputDevice)
                     val accepted = activeRecognizer.acceptWaveForm(buffer, count)
                     if (accepted) {
                         val r = activeRecognizer.result
